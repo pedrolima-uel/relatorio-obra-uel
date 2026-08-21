@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
 <title>UEL Fiscalização - Relatório Fotográfico</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0E2A3F">
@@ -976,7 +976,6 @@ function buildPdfDoc(){
   const obra = getObraData();
   const medicao = getMedicaoInfo();
   const reportTitle = medicao.ativa ? `RELATÓRIO FOTOGRÁFICO — ${medicao.nome.toUpperCase()}` : 'RELATÓRIO DE AVANÇO FÍSICO';
-  const footerTitle = medicao.ativa ? `Relatório Fotográfico — ${medicao.nome}` : 'Relatório de Avanço Físico';
   const pageW = 210, pageH = 297, margin = 16;
   const contentW = pageW - margin*2;
 
@@ -1044,11 +1043,14 @@ function buildPdfDoc(){
   doc.text(`Total de registros fotográficos: ${photos.length}`, margin, y);
 
   let pageNum = 1;
+  const footerLeft = medicao.ativa
+    ? `UEL — PCU/DOM — ${medicao.nome}`
+    : (obra.contrato ? `UEL — PCU/DOM — Contrato/Protocolo ${obra.contrato}` : 'UEL — PCU/DOM');
   const addFooter = () => {
     doc.setFont('helvetica','normal');
     doc.setFontSize(8.5);
     doc.setTextColor(140,140,140);
-    doc.text(`${obra.nome} — ${footerTitle}`, margin, pageH-10);
+    doc.text(footerLeft, margin, pageH-10);
     doc.text(`Pág. ${pageNum}`, pageW-margin, pageH-10, {align:'right'});
   };
   addFooter();
