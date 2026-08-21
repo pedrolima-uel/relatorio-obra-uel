@@ -1,6 +1,6 @@
 {
-  "name": "Relatório Fotográfico de Obra",
-  "short_name": "Relatório Obra",
+  "name": "UEL Fiscalização - Relatório Fotográfico",
+  "short_name": "UEL Fiscalização",
   "description": "Cadastro de obras, fotos de vistoria e geração de relatório fotográfico em PDF e Word.",
   "start_url": "./index.html",
   "scope": "./",
@@ -35,3 +35,4 @@
     }
   ]
 }
+
