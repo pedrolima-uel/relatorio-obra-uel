@@ -256,8 +256,12 @@
         <input type="text" id="nome" placeholder="Ex.: Reforma Sala 166 - Estúdio Audiovisual CLCH">
       </div>
       <div class="field">
-        <label for="local">Centro / Endereço</label>
-        <input type="text" id="local" placeholder="Ex.: Campus UEL, Bloco CLCH">
+        <label for="centro">Centro</label>
+        <input type="text" id="centro" placeholder="Ex.: CLCH">
+      </div>
+      <div class="field">
+        <label for="endereco">Endereço</label>
+        <input type="text" id="endereco" placeholder="Ex.: Campus UEL, Rodovia Celso Garcia Cid, km 380">
       </div>
       <div class="field">
         <label for="contrato">Contrato / Protocolo</label>
@@ -482,7 +486,8 @@ function renderObraSelect(){
 function clearObraForm(){
   currentObraId = null;
   document.getElementById('nome').value = '';
-  document.getElementById('local').value = '';
+  document.getElementById('centro').value = '';
+  document.getElementById('endereco').value = '';
   document.getElementById('contrato').value = '';
   document.getElementById('contratada').value = '';
   document.getElementById('responsavel').value = '';
@@ -493,7 +498,8 @@ function clearObraForm(){
 function fillObraForm(obra){
   currentObraId = obra.id;
   document.getElementById('nome').value = obra.nome || '';
-  document.getElementById('local').value = obra.local || '';
+  document.getElementById('centro').value = obra.centro || '';
+  document.getElementById('endereco').value = obra.endereco || '';
   document.getElementById('contrato').value = obra.contrato || '';
   document.getElementById('contratada').value = obra.contratada || '';
   document.getElementById('responsavel').value = obra.responsavel || '';
@@ -523,7 +529,8 @@ document.getElementById('btnSalvarObra').addEventListener('click', async () => {
   const obraData = {
     id,
     nome,
-    local: document.getElementById('local').value.trim(),
+    centro: document.getElementById('centro').value.trim(),
+    endereco: document.getElementById('endereco').value.trim(),
     contrato: document.getElementById('contrato').value.trim(),
     contratada: document.getElementById('contratada').value.trim(),
     responsavel: document.getElementById('responsavel').value.trim()
@@ -655,6 +662,7 @@ function dataUrlToBase64(dataUrl){
 
 function getVistoriaContext(){
   const nome = document.getElementById('nome').value.trim();
+  const centro = document.getElementById('centro').value.trim();
   const data = document.getElementById('data').value;
   if(!currentObraId){
     return { ok: false, msg: '⚠ Selecione ou salve uma obra cadastrada antes de usar a nuvem.' };
@@ -662,7 +670,24 @@ function getVistoriaContext(){
   if(!data){
     return { ok: false, msg: '⚠ Preencha a data da vistoria antes de usar a nuvem.' };
   }
-  return { ok: true, obraId: currentObraId, obraNome: nome, data };
+  return { ok: true, obraId: currentObraId, obraNome: nome, centro, data };
+}
+
+function sanitizeFileToken(text){
+  return (text || 'Centro')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) || 'Centro';
+}
+
+function formatFileTime(d){
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(d);
+  const h = parts.find(p => p.type === 'hour').value;
+  const m = parts.find(p => p.type === 'minute').value;
+  return `${h}${m}`;
 }
 
 document.getElementById('btnFinalizar').addEventListener('click', async () => {
@@ -682,6 +707,8 @@ document.getElementById('btnFinalizar').addEventListener('click', async () => {
     cloudStatusEl.className = 'status';
     try{
       const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
+      const seq = photos.indexOf(p) + 1;
+      const filename = `${String(seq).padStart(2,'0')}_${sanitizeFileToken(ctx.centro)}_${ctx.data}_${formatFileTime(p.timestamp)}.jpg`;
       const res = await fetch(SHEETS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -696,7 +723,7 @@ document.getElementById('btnFinalizar').addEventListener('click', async () => {
           caption: p.caption,
           lat: p.lat,
           lng: p.lng,
-          filename: `foto_${String(sent+1).padStart(2,'0')}.jpg`
+          filename
         })
       });
       const result = await res.json();
@@ -954,7 +981,8 @@ document.getElementById('selectAllCheck').addEventListener('change', (e) => {
 function getObraData(){
   return {
     nome: document.getElementById('nome').value.trim() || 'Obra não identificada',
-    local: document.getElementById('local').value.trim(),
+    centro: document.getElementById('centro').value.trim(),
+    endereco: document.getElementById('endereco').value.trim(),
     contrato: document.getElementById('contrato').value.trim(),
     contratada: document.getElementById('contratada').value.trim(),
     data: document.getElementById('data').value,
@@ -1064,7 +1092,8 @@ function buildPdfDoc(){
   };
   if(medicao.ativa) field('Medição', medicao.nome);
   field('Obra / Objeto', obra.nome);
-  field('Centro / Endereço', obra.local);
+  field('Centro', obra.centro);
+  field('Endereço', obra.endereco);
   field('Contrato / Protocolo', obra.contrato);
   field('Empresa / Contratada', obra.contratada);
   field('Data da vistoria', formatDateBR(obra.data));
@@ -1268,7 +1297,8 @@ function buildWordBlob(){
     <table border="0" cellpadding="0" cellspacing="0" width="680" style="margin-bottom:18px;">
       ${medicao.ativa ? rows('Medição', medicao.nome) : ''}
       ${rows('Obra / Objeto', obra.nome)}
-      ${rows('Centro / Endereço', obra.local)}
+      ${rows('Centro', obra.centro)}
+      ${rows('Endereço', obra.endereco)}
       ${rows('Contrato / Protocolo', obra.contrato)}
       ${rows('Empresa / Contratada', obra.contratada)}
       ${rows('Data da vistoria', formatDateBR(obra.data))}
