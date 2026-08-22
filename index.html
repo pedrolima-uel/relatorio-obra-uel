@@ -1123,16 +1123,14 @@ function buildPdfDoc(){
   addFooter();
 
   // ---- Grade de fotos: 2 colunas x 3 linhas (6 por página), sempre paisagem ----
-  const gridMargin = 11;
+  const gridMargin = 9;
   const colGap = 6;
   const rowGap = 4;
   const colW = (pageW - gridMargin*2 - colGap) / 2;
   const maxImgH = 63;
-  const cellH = 85;
+  const cellH = 87;
   const captionMaxLines = 2;
   const captionLineH = 4;
-  const coordsMaxLines = 2;
-  const coordsLineH = 3.4;
 
   doc.addPage();
   pageNum++;
@@ -1174,16 +1172,16 @@ function buildPdfDoc(){
     doc.setFontSize(8);
     doc.setTextColor(22,35,43);
     doc.text(capLines, cellX, capY);
-    capY += capLines.length * captionLineH + 2;
+    capY += capLines.length * captionLineH + 2.5;
 
     doc.setFont('courier','normal');
     doc.setFontSize(6.5);
     doc.setTextColor(140,140,140);
+    doc.text(fmtTs(p.timestamp), cellX, capY);
+    capY += 3.6;
+
     const coords = formatCoords(p.lat, p.lng);
-    const coordsText = coords ? `${fmtTs(p.timestamp)}  ·  📍 ${coords}` : fmtTs(p.timestamp);
-    let coordsLines = doc.splitTextToSize(coordsText, colW);
-    if(coordsLines.length > coordsMaxLines) coordsLines = coordsLines.slice(0, coordsMaxLines);
-    doc.text(coordsLines, cellX, capY);
+    doc.text(coords ? `GPS: ${coords}` : 'GPS: não disponível', cellX, capY);
 
     posInPage++;
   });
@@ -1327,7 +1325,7 @@ async function buildWordBlob(){
   const photoCellContent = (p, idx) => {
     const coords = formatCoords(p.lat, p.lng);
     const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
-    const maxW = 320, maxH = 215;
+    const maxW = 320, maxH = 200;
     const ratio = Math.min(maxW / p.w, maxH / p.h);
     const imgW = Math.round(p.w * ratio);
     const imgH = Math.round(p.h * ratio);
@@ -1349,8 +1347,11 @@ async function buildWordBlob(){
           children: [ new TextRun({ text: p.caption || '(sem legenda)', size: 19, color: INK }) ]
         }),
         new Paragraph({
+          children: [ new TextRun({ text: fmtTs(p.timestamp), size: 15, color: '8C8C8C', font: 'Courier New' }) ]
+        }),
+        new Paragraph({
           children: [ new TextRun({
-            text: coords ? `${fmtTs(p.timestamp)}  ·  📍 ${coords}` : fmtTs(p.timestamp),
+            text: coords ? `GPS: ${coords}` : 'GPS: não disponível',
             size: 15, color: '8C8C8C', font: 'Courier New'
           }) ]
         })
