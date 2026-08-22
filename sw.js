@@ -1,4 +1,4 @@
-const CACHE_NAME = 'relatorio-obra-v1';
+const CACHE_NAME = 'relatorio-obra-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
@@ -22,24 +22,33 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
 
-  // Nunca cachear chamadas à planilha (dados precisam vir sempre atualizados)
-  if (req.url.includes('script.google.com')) {
+  // Nunca cachear chamadas à planilha/Drive (dados precisam vir sempre atualizados)
+  if (req.url.includes('script.google.com') || req.url.includes('script.googleusercontent.com')) {
     return;
   }
 
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (req.method === 'GET' && res.ok && req.url.startsWith(self.location.origin)) {
-          const resClone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
-        }
-        return res;
-      }).catch(() => cached);
-    })
-  );
+  // Rede primeiro, cache só como reserva pra quando estiver offline.
+  // Assim, sempre que houver internet, a versão mais nova é buscada direto.
+  if (req.method === 'GET' && req.url.startsWith(self.location.origin)) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const resClone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+  }
 });

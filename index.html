@@ -1335,7 +1335,31 @@ loadObras();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      // Verifica se já existe uma versão nova esperando pra assumir
+      if(reg.waiting){
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      // Fica de olho em atualizações que cheguem depois
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if(!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
+      // Checa periodicamente se há versão nova publicada
+      setInterval(() => reg.update(), 60000);
+    }).catch(() => {});
+  });
+
+  let recarregando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(recarregando) return;
+    recarregando = true;
+    window.location.reload();
   });
 }
 </script>
