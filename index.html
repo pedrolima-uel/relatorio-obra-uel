@@ -1123,14 +1123,16 @@ function buildPdfDoc(){
   addFooter();
 
   // ---- Grade de fotos: 2 colunas x 3 linhas (6 por página), sempre paisagem ----
-  const gridMargin = 14;
+  const gridMargin = 11;
   const colGap = 6;
-  const rowGap = 5;
+  const rowGap = 4;
   const colW = (pageW - gridMargin*2 - colGap) / 2;
-  const maxImgH = 56;
-  const cellH = 86;
-  const captionMaxLines = 3;
+  const maxImgH = 63;
+  const cellH = 85;
+  const captionMaxLines = 2;
   const captionLineH = 4;
+  const coordsMaxLines = 2;
+  const coordsLineH = 3.4;
 
   doc.addPage();
   pageNum++;
@@ -1165,19 +1167,23 @@ function buildPdfDoc(){
     doc.setFontSize(7);
     doc.text(`FOTO ${String(i+1).padStart(2,'0')}`, cellX+1.5, cellY+3.8);
 
-    let capY = cellY + maxImgH + 4.5;
+    let capY = cellY + maxImgH + 3;
     let capLines = doc.splitTextToSize(p.caption || '(sem legenda)', colW);
     if(capLines.length > captionMaxLines) capLines = capLines.slice(0, captionMaxLines);
     doc.setFont('helvetica','normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(22,35,43);
     doc.text(capLines, cellX, capY);
     capY += capLines.length * captionLineH + 2;
+
     doc.setFont('courier','normal');
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     doc.setTextColor(140,140,140);
     const coords = formatCoords(p.lat, p.lng);
-    doc.text(coords ? `${fmtTs(p.timestamp)}  ·  📍 ${coords}` : fmtTs(p.timestamp), cellX, capY);
+    const coordsText = coords ? `${fmtTs(p.timestamp)}  ·  📍 ${coords}` : fmtTs(p.timestamp);
+    let coordsLines = doc.splitTextToSize(coordsText, colW);
+    if(coordsLines.length > coordsMaxLines) coordsLines = coordsLines.slice(0, coordsMaxLines);
+    doc.text(coordsLines, cellX, capY);
 
     posInPage++;
   });
@@ -1321,7 +1327,7 @@ async function buildWordBlob(){
   const photoCellContent = (p, idx) => {
     const coords = formatCoords(p.lat, p.lng);
     const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
-    const maxW = 300, maxH = 190;
+    const maxW = 320, maxH = 215;
     const ratio = Math.min(maxW / p.w, maxH / p.h);
     const imgW = Math.round(p.w * ratio);
     const imgH = Math.round(p.h * ratio);
