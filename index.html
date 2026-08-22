@@ -325,6 +325,10 @@
         <input type="date" id="rangeEnd">
       </div>
       <button class="btn-sm" id="btnLoadRange">☁ Carregar fotos do período</button>
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:600; color:var(--navy-2); margin-left:6px;">
+        <input type="checkbox" id="selectAllCheck" style="width:16px; height:16px; accent-color:var(--blueprint);">
+        Selecionar todas
+      </label>
     </div>
     <div class="hint">Útil pra reunir fotos de vistorias em datas diferentes num único relatório (ex.: acompanhamento de uma medição ao longo do mês).</div>
 
@@ -701,7 +705,7 @@ document.getElementById('btnLoadCloud').addEventListener('click', async () => {
   cloudStatusEl.textContent = 'Consultando fotos salvas nesta vistoria...';
   cloudStatusEl.className = 'status';
   try{
-    const listUrl = `${SHEETS_API_URL}?token=${encodeURIComponent(SHEETS_API_TOKEN)}&action=listPhotos&obraId=${encodeURIComponent(ctx.obraId)}&obraNome=${encodeURIComponent(ctx.obraNome)}&data=${encodeURIComponent(ctx.data)}`;
+    const listUrl = `${SHEETS_API_URL}?token=${encodeURIComponent(SHEETS_API_TOKEN)}&action=listPhotosRange&obraId=${encodeURIComponent(ctx.obraId)}&obraNome=${encodeURIComponent(ctx.obraNome)}&startDate=${encodeURIComponent(ctx.data)}&endDate=${encodeURIComponent(ctx.data)}`;
     const res = await fetch(listUrl);
     const list = await res.json();
     if(list.error) throw new Error(list.error);
@@ -907,10 +911,25 @@ function renderGallery(){
     `;
     card.querySelector('.del').addEventListener('click', () => deletePhoto(p.id));
     card.querySelector('textarea').addEventListener('input', (e) => updateCaption(p.id, e.target.value));
-    card.querySelector('.selCheck').addEventListener('change', (e) => { p.selected = e.target.checked; });
+    card.querySelector('.selCheck').addEventListener('change', (e) => {
+      p.selected = e.target.checked;
+      syncSelectAllCheckbox();
+    });
     photoGrid.appendChild(card);
   });
+  syncSelectAllCheckbox();
 }
+
+function syncSelectAllCheckbox(){
+  const selectAllEl = document.getElementById('selectAllCheck');
+  if(!selectAllEl) return;
+  selectAllEl.checked = photos.length > 0 && photos.every(p => p.selected);
+}
+
+document.getElementById('selectAllCheck').addEventListener('change', (e) => {
+  photos.forEach(p => { p.selected = e.target.checked; });
+  renderGallery();
+});
 
 /* ---------------- DADOS GERAIS ---------------- */
 
