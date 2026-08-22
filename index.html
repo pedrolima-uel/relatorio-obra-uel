@@ -15,6 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.2.4/build/index.umd.js"></script>
 <style>
   :root{
     --navy: #0E2A3F;
@@ -349,7 +350,7 @@
       <button class="btn btn-share" id="btnPdfShare">📤 Compartilhar PDF</button>
     </div>
     <div style="display:flex; gap:12px; flex-wrap:wrap;">
-      <button class="btn btn-word" id="btnWord">⬇ Baixar Word (.doc)</button>
+      <button class="btn btn-word" id="btnWord">⬇ Baixar Word (.docx)</button>
       <button class="btn btn-share" id="btnWordShare">📤 Compartilhar Word</button>
     </div>
   </div>
@@ -1187,48 +1188,171 @@ function buildPdfDoc(){
   return { doc, filename };
 }
 
-/* ---------------- WORD (.doc) GENERATION ---------------- */
-document.getElementById('btnWord').addEventListener('click', () => {
+/* ---------------- WORD (.docx) GENERATION — arquivo nativo de verdade ---------------- */
+document.getElementById('btnWord').addEventListener('click', async () => {
   if(!validate()) return;
   statusEl.textContent = 'Gerando Word...';
-  setTimeout(() => {
-    const { blob, filename } = buildWordBlob();
+  statusEl.className = 'status';
+  try{
+    const { blob, filename } = await buildWordBlob();
     downloadBlob(blob, filename);
-    statusEl.textContent = '✓ Documento Word (.doc) gerado com sucesso.';
+    statusEl.textContent = '✓ Documento Word (.docx) gerado com sucesso.';
     statusEl.className = 'status ok';
-  }, 30);
+  }catch(e){
+    statusEl.textContent = '⚠ Não foi possível gerar o Word agora.';
+    statusEl.className = 'status err';
+  }
 });
 
-document.getElementById('btnWordShare').addEventListener('click', () => {
+document.getElementById('btnWordShare').addEventListener('click', async () => {
   if(!validate()) return;
   statusEl.textContent = 'Preparando Word para compartilhar...';
-  setTimeout(async () => {
-    const { blob, filename } = buildWordBlob();
-    await shareFile(blob, filename, 'application/msword');
-  }, 30);
+  statusEl.className = 'status';
+  try{
+    const { blob, filename } = await buildWordBlob();
+    await shareFile(blob, filename, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  }catch(e){
+    statusEl.textContent = '⚠ Não foi possível gerar o Word agora.';
+    statusEl.className = 'status err';
+  }
 });
 
-function buildWordBlob(){
+async function buildWordBlob(){
+  const {
+    Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell,
+    WidthType, AlignmentType, BorderStyle, VerticalAlign, ShadingType
+  } = docx;
+
   const obra = getObraData();
   const medicao = getMedicaoInfo();
-  const reportTitle = medicao.ativa ? `Relatório Fotográfico — ${medicao.nome}` : 'Relatório de Avanço Físico';
+  const reportTitle = medicao.ativa ? `RELATÓRIO FOTOGRÁFICO — ${medicao.nome.toUpperCase()}` : 'RELATÓRIO DE AVANÇO FÍSICO';
+  const NAVY = '0E2A3F', TEAL_TXT = '1C6E8C', MUTED = '5C6B73', INK = '16232B', LABEL_BG = 'F0EFEA', LIGHT_BORDER = 'DCD8CC';
 
-  const rows = (label, value) => `
-    <tr>
-      <td width="220" style="padding:6px 10px; background:#F0EFEA; font-family:Calibri,sans-serif; font-size:11pt; font-weight:bold; color:#5C6B73;">${label}</td>
-      <td style="padding:6px 10px; font-family:Calibri,sans-serif; font-size:11pt; color:#16232B;">${(value||'—').replace(/\n/g,'<br>')}</td>
-    </tr>`;
-
-  const photoCell = (p, idx) => {
-    const coords = formatCoords(p.lat, p.lng);
-    return `
-    <div style="text-align:center;">
-      <table cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#0E2A3F; padding:2px 7px;"><font face="Courier New" size="1" color="#2FBF9F">FOTO ${String(idx+1).padStart(2,'0')}</font></td></tr></table>
-      <img src="${p.dataUrl}" width="300" style="border:1px solid #DCD8CC; margin-top:4px;" />
-      <p style="font-family:Calibri,sans-serif; font-size:9.5pt; margin:4px 0 2px; color:#16232B; text-align:left;">${(p.caption || '(sem legenda)').replace(/\n/g,'<br>')}</p>
-      <p style="font-family:'Courier New',monospace; font-size:7.5pt; color:#8C8C8C; margin:0; text-align:left;">${fmtTs(p.timestamp)}${coords ? '  ·  📍 ' + coords : ''}</p>
-    </div>`;
+  const noBorders = {
+    top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
   };
+
+  function base64ToUint8(base64){
+    const bin = atob(base64);
+    const arr = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  }
+
+  function mimeToDocxType(mimeType){
+    if(mimeType && mimeType.includes('png')) return 'png';
+    if(mimeType && mimeType.includes('gif')) return 'gif';
+    if(mimeType && mimeType.includes('bmp')) return 'bmp';
+    return 'jpg';
+  }
+
+  // ---- Cabeçalho institucional ----
+  const headerChildren = [];
+  if(logoDataUrl){
+    const { mimeType, base64 } = dataUrlToBase64(logoDataUrl);
+    const logoW = 130;
+    const logoH = Math.round(logoW / (logoAspect || 4));
+    headerChildren.push(new ImageRun({ type: mimeToDocxType(mimeType), data: base64ToUint8(base64), transformation: { width: logoW, height: logoH } }));
+  }
+
+  const headerCell = new TableCell({
+    borders: noBorders,
+    verticalAlign: VerticalAlign.CENTER,
+    children: [
+      new Paragraph({ children: [ new TextRun({ text: 'UNIVERSIDADE ESTADUAL DE LONDRINA', bold: true, size: 21, color: TEAL_TXT }) ] }),
+      new Paragraph({ children: [ new TextRun({ text: 'PCU — DIRETORIA DE OBRAS E MANUTENÇÃO (DOM)', size: 18, color: MUTED }) ] }),
+      new Paragraph({ spacing: { before: 60 }, children: [ new TextRun({ text: reportTitle, bold: true, size: medicao.ativa ? 30 : 34, color: NAVY }) ] })
+    ]
+  });
+
+  const logoCell = new TableCell({
+    borders: noBorders,
+    width: { size: 1600, type: WidthType.DXA },
+    verticalAlign: VerticalAlign.CENTER,
+    children: [ new Paragraph({ children: headerChildren }) ]
+  });
+
+  const headerTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: noBorders,
+    rows: [ new TableRow({ children: logoDataUrl ? [logoCell, headerCell] : [headerCell] }) ]
+  });
+
+  // ---- Tabela de dados da obra ----
+  const infoRow = (label, value) => new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 2800, type: WidthType.DXA },
+        shading: { type: ShadingType.CLEAR, color: 'auto', fill: LABEL_BG },
+        borders: noBorders,
+        margins: { top: 100, bottom: 100, left: 120, right: 120 },
+        children: [ new Paragraph({ children: [ new TextRun({ text: label, bold: true, size: 20, color: MUTED }) ] }) ]
+      }),
+      new TableCell({
+        borders: noBorders,
+        margins: { top: 100, bottom: 100, left: 120, right: 120 },
+        children: [ new Paragraph({ children: [ new TextRun({ text: value || '—', size: 22, color: INK }) ] }) ]
+      })
+    ]
+  });
+
+  const infoRows = [];
+  if(medicao.ativa) infoRows.push(infoRow('Medição', medicao.nome));
+  infoRows.push(infoRow('Obra / Objeto', obra.nome));
+  infoRows.push(infoRow('Centro', obra.centro));
+  infoRows.push(infoRow('Endereço', obra.endereco));
+  infoRows.push(infoRow('Contrato / Protocolo', obra.contrato));
+  infoRows.push(infoRow('Empresa / Contratada', obra.contratada));
+  infoRows.push(infoRow('Data da vistoria', formatDateBR(obra.data)));
+  infoRows.push(infoRow('Fiscal do contrato', obra.responsavel));
+  if(obra.obs) infoRows.push(infoRow('Observações gerais', obra.obs));
+  infoRows.push(infoRow('Total de registros fotográficos', String(photos.length)));
+
+  const infoTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: noBorders,
+    rows: infoRows
+  });
+
+  // ---- Grade de fotos: 2 colunas x 3 linhas (6 por página), sempre paisagem ----
+  const photoCellContent = (p, idx) => {
+    const coords = formatCoords(p.lat, p.lng);
+    const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
+    const maxW = 300, maxH = 190;
+    const ratio = Math.min(maxW / p.w, maxH / p.h);
+    const imgW = Math.round(p.w * ratio);
+    const imgH = Math.round(p.h * ratio);
+
+    return new TableCell({
+      borders: noBorders,
+      margins: { top: 120, bottom: 160, left: 100, right: 100 },
+      children: [
+        new Paragraph({
+          shading: { type: ShadingType.CLEAR, color: 'auto', fill: NAVY },
+          children: [ new TextRun({ text: ` FOTO ${String(idx+1).padStart(2,'0')} `, bold: true, size: 14, color: '2FBF9F', font: 'Courier New' }) ]
+        }),
+        new Paragraph({
+          spacing: { before: 80 },
+          children: [ new ImageRun({ type: mimeToDocxType(mimeType), data: base64ToUint8(base64), transformation: { width: imgW, height: imgH } }) ]
+        }),
+        new Paragraph({
+          spacing: { before: 60 },
+          children: [ new TextRun({ text: p.caption || '(sem legenda)', size: 19, color: INK }) ]
+        }),
+        new Paragraph({
+          children: [ new TextRun({
+            text: coords ? `${fmtTs(p.timestamp)}  ·  📍 ${coords}` : fmtTs(p.timestamp),
+            size: 15, color: '8C8C8C', font: 'Courier New'
+          }) ]
+        })
+      ]
+    });
+  };
+
+  const emptyCell = () => new TableCell({ borders: noBorders, children: [ new Paragraph({ text: '' }) ] });
 
   const chunk = (arr, size) => {
     const out = [];
@@ -1237,84 +1361,35 @@ function buildWordBlob(){
   };
 
   const photoGroups = chunk(photos, 6);
-  const groupsHtml = photoGroups.map((group, gi) => {
-    const rowsHtml = [];
+  const bodyChildren = [ headerTable, new Paragraph({ text: '', spacing: { after: 200 } }), infoTable ];
+
+  photoGroups.forEach((group, gi) => {
+    const rows = [];
     for(let r=0; r<3; r++){
       const left = group[r*2];
       const right = group[r*2+1];
-      rowsHtml.push(`
-        <tr>
-          <td width="340" style="padding:8px; vertical-align:top;">${left ? photoCell(left, gi*6 + r*2) : '&nbsp;'}</td>
-          <td width="340" style="padding:8px; vertical-align:top;">${right ? photoCell(right, gi*6 + r*2 + 1) : '&nbsp;'}</td>
-        </tr>`);
+      if(!left && !right) continue;
+      rows.push(new TableRow({
+        children: [
+          left ? photoCellContent(left, gi*6 + r*2) : emptyCell(),
+          right ? photoCellContent(right, gi*6 + r*2 + 1) : emptyCell()
+        ]
+      }));
     }
-    const table = `<table border="0" cellpadding="0" cellspacing="0" width="680" style="table-layout:fixed;">${rowsHtml.join('')}</table>`;
-    return gi > 0 ? `<br clear="all" style="mso-special-character:line-break;page-break-before:always">${table}` : table;
-  }).join('');
+    bodyChildren.push(new Paragraph({ text: '', pageBreakBefore: true }));
+    bodyChildren.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: noBorders, rows }));
+  });
 
-  const logoCell = logoDataUrl
-    ? `<td width="90" style="vertical-align:middle;"><img src="${logoDataUrl}" width="80" /></td>`
-    : '';
+  const doc = new Document({
+    sections: [{
+      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 900, bottom: 900, left: 850, right: 850 } } },
+      children: bodyChildren
+    }]
+  });
 
-  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-  <head>
-    <meta charset="utf-8">
-    <meta name="ProgId" content="Word.Document">
-    <title>${reportTitle}</title>
-    <!--[if gte mso 9]>
-    <xml>
-      <w:WordDocument>
-        <w:View>Print</w:View>
-        <w:Zoom>100</w:Zoom>
-        <w:DoNotOptimizeForBrowser/>
-      </w:WordDocument>
-    </xml>
-    <![endif]-->
-    <style>
-      @page Section1 { size: 21cm 29.7cm; margin: 1.6cm 1.4cm 1.6cm 1.4cm; mso-page-orientation: portrait; }
-      div.Section1 { page: Section1; }
-      body { font-family: Calibri, sans-serif; }
-      table { border-collapse: collapse; }
-    </style>
-  </head>
-  <body>
-  <div class="Section1">
-    <table border="0" cellpadding="0" cellspacing="0" width="680" style="border-bottom:3px solid #0E2A3F; margin-bottom:14px;">
-      <tr>
-        <td colspan="2" style="padding-bottom:12px;">
-          <table border="0" cellpadding="0" cellspacing="0" width="680"><tr>
-            ${logoCell}
-            <td style="vertical-align:middle; padding-left:${logoDataUrl ? '14px' : '0'};">
-              <div style="font-family:Calibri,sans-serif; font-size:10.5pt; font-weight:bold; color:#1C6E8C;">UNIVERSIDADE ESTADUAL DE LONDRINA</div>
-              <div style="font-family:Calibri,sans-serif; font-size:9pt; color:#5C6B73;">PCU — DIRETORIA DE OBRAS E MANUTENÇÃO (DOM)</div>
-              <div style="font-family:Calibri,sans-serif; font-size:17pt; font-weight:bold; margin-top:4px; color:#0E2A3F;">${reportTitle}</div>
-            </td>
-          </tr></table>
-        </td>
-      </tr>
-    </table>
-
-    <table border="0" cellpadding="0" cellspacing="0" width="680" style="margin-bottom:18px;">
-      ${medicao.ativa ? rows('Medição', medicao.nome) : ''}
-      ${rows('Obra / Objeto', obra.nome)}
-      ${rows('Centro', obra.centro)}
-      ${rows('Endereço', obra.endereco)}
-      ${rows('Contrato / Protocolo', obra.contrato)}
-      ${rows('Empresa / Contratada', obra.contratada)}
-      ${rows('Data da vistoria', formatDateBR(obra.data))}
-      ${rows('Fiscal do contrato', obra.responsavel)}
-      ${obra.obs ? rows('Observações gerais', obra.obs) : ''}
-      ${rows('Total de registros fotográficos', String(photos.length))}
-    </table>
-
-    ${groupsHtml}
-  </div>
-  </body>
-  </html>`;
-
-  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const blob = await Packer.toBlob(doc);
   const baseName = medicao.ativa ? `medicao_${medicao.nome}` : 'avanco_fisico';
-  const filename = `relatorio_${baseName}_${obra.nome.replace(/[^a-zA-Z0-9]+/g,'_').slice(0,40)}.doc`.replace(/[^a-zA-Z0-9._]+/g,'_');
+  const filename = `relatorio_${baseName}_${obra.nome.replace(/[^a-zA-Z0-9]+/g,'_').slice(0,40)}.docx`.replace(/[^a-zA-Z0-9._]+/g,'_');
   return { blob, filename };
 }
 
