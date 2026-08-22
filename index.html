@@ -387,13 +387,21 @@ function getMedicaoInfo(){
 
 const dataInput = document.getElementById('data');
 
-dataInput.valueAsDate = new Date();
+function getBrasiliaDateString(){
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+
+dataInput.value = getBrasiliaDateString();
 
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible'){
-    dataInput.valueAsDate = new Date();
+    dataInput.value = getBrasiliaDateString();
   }
 });
+
+setInterval(() => {
+  dataInput.value = getBrasiliaDateString();
+}, 60000);
 
 /* ---------------- GEOLOCALIZAÇÃO ---------------- */
 let currentPosition = null;
@@ -892,7 +900,8 @@ function updateCaption(id, value){
 }
 
 function fmtTs(d){
-  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  const tz = 'America/Sao_Paulo';
+  return d.toLocaleDateString('pt-BR', { timeZone: tz }) + ' ' + d.toLocaleTimeString('pt-BR', { timeZone: tz, hour:'2-digit', minute:'2-digit' });
 }
 
 function renderGallery(){
