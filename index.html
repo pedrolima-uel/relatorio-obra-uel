@@ -280,7 +280,8 @@
     <div class="grid">
       <div class="field">
         <label for="data">Data da vistoria</label>
-        <input type="date" id="data">
+        <input type="date" id="data" disabled style="opacity:.8;">
+        <span style="font-size:11px; color:var(--muted);">Sempre a data de hoje, travada automaticamente.</span>
       </div>
       <div class="field full">
         <label for="obs">Observações gerais</label>
@@ -384,7 +385,15 @@ function getMedicaoInfo(){
   return { ativa: checked && !!nome, nome };
 }
 
-document.getElementById('data').valueAsDate = new Date();
+const dataInput = document.getElementById('data');
+
+dataInput.valueAsDate = new Date();
+
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible'){
+    dataInput.valueAsDate = new Date();
+  }
+});
 
 /* ---------------- GEOLOCALIZAÇÃO ---------------- */
 let currentPosition = null;
