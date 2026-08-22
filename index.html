@@ -219,8 +219,15 @@
 <body>
 
 <header>
-  <div class="eyebrow">UNIVERSIDADE ESTADUAL DE LONDRINA · PCU/DOM</div>
-  <h1>Relatório de Avanço Físico</h1>
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+    <div>
+      <div class="eyebrow">UNIVERSIDADE ESTADUAL DE LONDRINA · PCU/DOM</div>
+      <h1>Relatório de Avanço Físico</h1>
+    </div>
+    <button id="btnAtualizar" title="Limpar tudo e começar um novo trabalho" style="flex-shrink:0; background:transparent; border:1.5px solid rgba(255,255,255,.35); color:#fff; border-radius:8px; padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
+      ⟳ Atualizar
+    </button>
+  </div>
 </header>
 
 <main>
@@ -1441,6 +1448,16 @@ async function shareFile(blob, filename, mimeType){
     }
   }
 }
+
+document.getElementById('btnAtualizar').addEventListener('click', () => {
+  const temPendente = photos.some(p => !p.uploaded);
+  const aviso = temPendente
+    ? 'Isso vai limpar tudo na tela e começar um novo trabalho do zero. Você tem fotos que ainda NÃO foram enviadas ao Drive — elas serão perdidas. Deseja continuar mesmo assim?'
+    : 'Isso vai limpar tudo na tela e começar um novo trabalho do zero. Deseja continuar?';
+  if(confirm(aviso)){
+    window.location.reload();
+  }
+});
 
 renderGallery();
 loadObras();
