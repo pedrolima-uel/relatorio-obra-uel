@@ -16,6 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.2.4/build/index.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
 <style>
   :root{
     --navy: #0E2A3F;
@@ -338,11 +339,14 @@
         <input type="date" id="rangeEnd">
       </div>
       <button class="btn-sm" id="btnLoadRange">☁ Carregar fotos do período</button>
+      <label class="btn-sm" for="uploadInput" style="cursor:pointer;">📁 Enviar fotos do aparelho</label>
+      <input type="file" id="uploadInput" accept="image/*" multiple style="display:none;">
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:600; color:var(--navy-2); margin-left:6px;">
         <input type="checkbox" id="selectAllCheck" style="width:16px; height:16px; accent-color:var(--blueprint);">
         Selecionar todas
       </label>
     </div>
+    <div class="hint">"Enviar fotos do aparelho" abre a galeria pra escolher fotos já existentes (tiradas antes), em vez da câmera. Se a foto tiver localização salva nela mesma, o app aproveita automaticamente.</div>
     <div class="hint">Útil pra reunir fotos de vistorias em datas diferentes num único relatório (ex.: acompanhamento de uma medição ao longo do mês).</div>
 
     <div class="status" id="cloudStatus"></div>
@@ -586,11 +590,25 @@ document.getElementById('btnExcluirObra').addEventListener('click', async () => 
 
 fileInput.addEventListener('change', (e) => {
   const files = Array.from(e.target.files || []);
-  files.forEach(readFile);
+  files.forEach(f => readFile(f, 'camera'));
   fileInput.value = '';
 });
 
-function readFile(file){
+const uploadInput = document.getElementById('uploadInput');
+uploadInput.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files || []);
+  files.forEach(f => readFile(f, 'gallery'));
+  uploadInput.value = '';
+});
+
+function exifToDecimal(dms, ref){
+  if(!dms || dms.length < 3) return null;
+  const decimal = dms[0] + dms[1]/60 + dms[2]/3600;
+  return (ref === 'S' || ref === 'W') ? -decimal : decimal;
+}
+
+function readFile(file, source){
+  source = source || 'camera';
   const reader = new FileReader();
   reader.onload = (ev) => {
     const img = new Image();
@@ -612,20 +630,50 @@ function readFile(file){
         w = cw; h = ch;
       }
 
-      photos.push({
-        id: nextId++,
-        dataUrl: finalDataUrl,
-        caption: '',
-        timestamp: new Date(),
-        w: w,
-        h: h,
-        driveId: null,
-        uploaded: false,
-        lat: currentPosition ? currentPosition.lat : null,
-        lng: currentPosition ? currentPosition.lng : null,
-        selected: false
-      });
-      renderGallery();
+      const addPhoto = (lat, lng, capturedAt) => {
+        photos.push({
+          id: nextId++,
+          dataUrl: finalDataUrl,
+          caption: '',
+          timestamp: capturedAt || new Date(),
+          w: w,
+          h: h,
+          driveId: null,
+          uploaded: false,
+          lat: lat,
+          lng: lng,
+          selected: false
+        });
+        renderGallery();
+      };
+
+      function parseExifDate(str){
+        if(!str) return null;
+        const [datePart, timePart] = str.split(' ');
+        if(!datePart || !timePart) return null;
+        const iso = `${datePart.replace(/:/g,'-')}T${timePart}`;
+        const d = new Date(iso);
+        return isNaN(d.getTime()) ? null : d;
+      }
+
+      if(source === 'gallery' && window.EXIF){
+        try{
+          EXIF.getData(file, function(){
+            const latDms = EXIF.getTag(this, 'GPSLatitude');
+            const lonDms = EXIF.getTag(this, 'GPSLongitude');
+            const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+            const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+            const lat = exifToDecimal(latDms, latRef);
+            const lng = exifToDecimal(lonDms, lonRef);
+            const capturedAt = parseExifDate(EXIF.getTag(this, 'DateTimeOriginal'));
+            addPhoto(lat, lng, capturedAt);
+          });
+        }catch(e){
+          addPhoto(null, null);
+        }
+      }else{
+        addPhoto(currentPosition ? currentPosition.lat : null, currentPosition ? currentPosition.lng : null);
+      }
     };
     img.src = ev.target.result;
   };
