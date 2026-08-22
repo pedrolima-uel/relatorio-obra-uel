@@ -273,8 +273,16 @@
         <input type="text" id="endereco" placeholder="Ex.: Campus UEL, Rodovia Celso Garcia Cid, km 380">
       </div>
       <div class="field">
-        <label for="contrato">Contrato / Protocolo</label>
-        <input type="text" id="contrato" placeholder="Ex.: 24.170.161-1">
+        <label for="contratoNumero">Contrato Nº</label>
+        <input type="text" id="contratoNumero" inputmode="numeric" placeholder="Ex.: 2166">
+      </div>
+      <div class="field">
+        <label for="contratoAno">Ano</label>
+        <input type="text" id="contratoAno" inputmode="numeric" placeholder="Ex.: 2025">
+      </div>
+      <div class="field">
+        <label for="protocolo">Protocolo</label>
+        <input type="text" id="protocolo" placeholder="Ex.: 24.170.161-1">
       </div>
       <div class="field">
         <label for="contratada">Empresa / Contratada</label>
@@ -285,6 +293,7 @@
         <input type="text" id="responsavel" placeholder="Ex.: Eng. Pedro Lima - CREA/RJ 2010117595/D">
       </div>
     </div>
+    <div class="hint" style="margin-top:2px;">Preencha "Contrato Nº/Ano" quando houver contrato formal, ou "Protocolo" quando for um processo/protocolo administrativo. Pode preencher os dois se for o caso.</div>
     <div class="status" id="obraStatus"></div>
   </section>
 
@@ -390,6 +399,12 @@ const logoAspect = DEFAULT_LOGO_ASPECT;
 logoPreview.src = logoDataUrl;
 
 const MASTER_PASSWORD = '12240777761';
+
+['contratoNumero', 'contratoAno'].forEach(id => {
+  document.getElementById(id).addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/[^0-9]/g, '');
+  });
+});
 
 document.getElementById('medicaoCheck').addEventListener('change', (e) => {
   document.getElementById('medicaoNomeWrap').style.display = e.target.checked ? 'block' : 'none';
@@ -500,7 +515,9 @@ function clearObraForm(){
   document.getElementById('nome').value = '';
   document.getElementById('centro').value = '';
   document.getElementById('endereco').value = '';
-  document.getElementById('contrato').value = '';
+  document.getElementById('contratoNumero').value = '';
+  document.getElementById('contratoAno').value = '';
+  document.getElementById('protocolo').value = '';
   document.getElementById('contratada').value = '';
   document.getElementById('responsavel').value = '';
   obraSelect.value = '';
@@ -512,7 +529,9 @@ function fillObraForm(obra){
   document.getElementById('nome').value = obra.nome || '';
   document.getElementById('centro').value = obra.centro || '';
   document.getElementById('endereco').value = obra.endereco || '';
-  document.getElementById('contrato').value = obra.contrato || '';
+  document.getElementById('contratoNumero').value = obra.contratoNumero || '';
+  document.getElementById('contratoAno').value = obra.contratoAno || '';
+  document.getElementById('protocolo').value = obra.protocolo || '';
   document.getElementById('contratada').value = obra.contratada || '';
   document.getElementById('responsavel').value = obra.responsavel || '';
   document.getElementById('btnExcluirObra').disabled = false;
@@ -543,7 +562,9 @@ document.getElementById('btnSalvarObra').addEventListener('click', async () => {
     nome,
     centro: document.getElementById('centro').value.trim(),
     endereco: document.getElementById('endereco').value.trim(),
-    contrato: document.getElementById('contrato').value.trim(),
+    contratoNumero: document.getElementById('contratoNumero').value.trim(),
+    contratoAno: document.getElementById('contratoAno').value.trim(),
+    protocolo: document.getElementById('protocolo').value.trim(),
     contratada: document.getElementById('contratada').value.trim(),
     responsavel: document.getElementById('responsavel').value.trim()
   };
@@ -719,6 +740,9 @@ function dataUrlToBase64(dataUrl){
 function getVistoriaContext(){
   const nome = document.getElementById('nome').value.trim();
   const centro = document.getElementById('centro').value.trim();
+  const contratoNumero = document.getElementById('contratoNumero').value.trim();
+  const contratoAno = document.getElementById('contratoAno').value.trim();
+  const protocolo = document.getElementById('protocolo').value.trim();
   const data = document.getElementById('data').value;
   if(!currentObraId){
     return { ok: false, msg: '⚠ Selecione ou salve uma obra cadastrada antes de usar a nuvem.' };
@@ -726,7 +750,7 @@ function getVistoriaContext(){
   if(!data){
     return { ok: false, msg: '⚠ Preencha a data da vistoria antes de usar a nuvem.' };
   }
-  return { ok: true, obraId: currentObraId, obraNome: nome, centro, data };
+  return { ok: true, obraId: currentObraId, obraNome: nome, centro, contratoNumero, contratoAno, protocolo, data };
 }
 
 function sanitizeFileToken(text){
@@ -764,7 +788,10 @@ document.getElementById('btnFinalizar').addEventListener('click', async () => {
     try{
       const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
       const seq = photos.indexOf(p) + 1;
-      const filename = `${String(seq).padStart(2,'0')}_${sanitizeFileToken(ctx.centro)}_${ctx.data}_${formatFileTime(p.timestamp)}.jpg`;
+      const contratoToken = (ctx.contratoNumero || ctx.contratoAno)
+        ? `${ctx.contratoNumero || 'SN'}_${ctx.contratoAno || 'SA'}`
+        : (ctx.protocolo ? sanitizeFileToken(ctx.protocolo) : 'SC');
+      const filename = `${String(seq).padStart(2,'0')}_${sanitizeFileToken(ctx.centro)}_${contratoToken}_${ctx.data}_${formatFileTime(p.timestamp)}.jpg`;
       const res = await fetch(SHEETS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -1035,11 +1062,17 @@ document.getElementById('selectAllCheck').addEventListener('change', (e) => {
 /* ---------------- DADOS GERAIS ---------------- */
 
 function getObraData(){
+  const contratoNumero = document.getElementById('contratoNumero').value.trim();
+  const contratoAno = document.getElementById('contratoAno').value.trim();
+  const protocolo = document.getElementById('protocolo').value.trim();
   return {
     nome: document.getElementById('nome').value.trim() || 'Obra não identificada',
     centro: document.getElementById('centro').value.trim(),
     endereco: document.getElementById('endereco').value.trim(),
-    contrato: document.getElementById('contrato').value.trim(),
+    contratoNumero,
+    contratoAno,
+    contrato: (contratoNumero || contratoAno) ? `${contratoNumero || '—'}/${contratoAno || '—'}` : '',
+    protocolo,
     contratada: document.getElementById('contratada').value.trim(),
     data: document.getElementById('data').value,
     responsavel: document.getElementById('responsavel').value.trim(),
@@ -1150,7 +1183,8 @@ function buildPdfDoc(){
   field('Obra / Objeto', obra.nome);
   field('Centro', obra.centro);
   field('Endereço', obra.endereco);
-  field('Contrato / Protocolo', obra.contrato);
+  if(obra.contrato) field('Contrato', obra.contrato);
+  if(obra.protocolo) field('Protocolo', obra.protocolo);
   field('Empresa / Contratada', obra.contratada);
   field('Data da vistoria', formatDateBR(obra.data));
   field('Fiscal do contrato', obra.responsavel);
@@ -1165,9 +1199,10 @@ function buildPdfDoc(){
   doc.text(`Total de registros fotográficos: ${photos.length}`, margin, y);
 
   let pageNum = 1;
+  const identificador = obra.contrato || obra.protocolo || '';
   const footerLeft = medicao.ativa
     ? `UEL — PCU/DOM — ${medicao.nome}`
-    : (obra.contrato ? `UEL — PCU/DOM — Contrato/Protocolo ${obra.contrato}` : 'UEL — PCU/DOM');
+    : (identificador ? `UEL — PCU/DOM — ${obra.contrato ? 'Contrato' : 'Protocolo'} ${identificador}` : 'UEL — PCU/DOM');
   const addFooter = () => {
     doc.setFont('helvetica','normal');
     doc.setFontSize(8.5);
@@ -1363,7 +1398,8 @@ async function buildWordBlob(){
   infoRows.push(infoRow('Obra / Objeto', obra.nome));
   infoRows.push(infoRow('Centro', obra.centro));
   infoRows.push(infoRow('Endereço', obra.endereco));
-  infoRows.push(infoRow('Contrato / Protocolo', obra.contrato));
+  if(obra.contrato) infoRows.push(infoRow('Contrato', obra.contrato));
+  if(obra.protocolo) infoRows.push(infoRow('Protocolo', obra.protocolo));
   infoRows.push(infoRow('Empresa / Contratada', obra.contratada));
   infoRows.push(infoRow('Data da vistoria', formatDateBR(obra.data)));
   infoRows.push(infoRow('Fiscal do contrato', obra.responsavel));
