@@ -316,10 +316,16 @@
         <input type="checkbox" id="medicaoCheck" style="width:18px; height:18px; accent-color:var(--blueprint);">
         Este relatório é para uma Medição
       </label>
-      <div id="medicaoNomeWrap" style="display:none; margin-top:10px; max-width:320px;">
-        <div class="field">
-          <label for="medicaoNome">Identificação da medição</label>
-          <input type="text" id="medicaoNome" placeholder="Ex.: Medição 01">
+      <div id="medicaoNomeWrap" style="display:none; margin-top:10px;">
+        <div class="grid">
+          <div class="field">
+            <label for="medicaoNome">Identificação da medição</label>
+            <input type="text" id="medicaoNome" placeholder="Ex.: Medição 01">
+          </div>
+          <div class="field">
+            <label for="medicaoPercentual">Percentual executado até esta medição</label>
+            <input type="text" id="medicaoPercentual" inputmode="decimal" placeholder="Ex.: 42,5">
+          </div>
         </div>
       </div>
     </div>
@@ -1129,7 +1135,7 @@ function buildPdfDoc(){
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const obra = getObraData();
   const medicao = getMedicaoInfo();
-  const reportTitle = medicao.ativa ? `RELATÓRIO FOTOGRÁFICO — ${medicao.nome.toUpperCase()}` : 'RELATÓRIO DE AVANÇO FÍSICO';
+  const reportTitle = medicao.ativa ? 'RELATÓRIO FOTOGRÁFICO — MEDIÇÃO' : 'RELATÓRIO DE AVANÇO FÍSICO';
   const pageW = 210, pageH = 297, margin = 16;
   const contentW = pageW - margin*2;
 
@@ -1186,7 +1192,7 @@ function buildPdfDoc(){
   if(obra.contrato) field('Contrato', obra.contrato);
   if(obra.protocolo) field('Protocolo', obra.protocolo);
   field('Empresa / Contratada', obra.contratada);
-  field('Data da vistoria', formatDateBR(obra.data));
+  field('Data do relatório', formatDateBR(obra.data));
   field('Fiscal do contrato', obra.responsavel);
   if(obra.obs) field('Observações gerais', obra.obs);
 
@@ -1201,7 +1207,7 @@ function buildPdfDoc(){
   let pageNum = 1;
   const identificador = obra.contrato || obra.protocolo || '';
   const footerLeft = medicao.ativa
-    ? `UEL — PCU/DOM — ${medicao.nome}`
+    ? (obra.contrato ? `UEL — PCU/DOM — ${medicao.nome} — Contrato ${obra.contrato}` : `UEL — PCU/DOM — ${medicao.nome}`)
     : (identificador ? `UEL — PCU/DOM — ${obra.contrato ? 'Contrato' : 'Protocolo'} ${identificador}` : 'UEL — PCU/DOM');
   const addFooter = () => {
     doc.setFont('helvetica','normal');
@@ -1319,7 +1325,7 @@ async function buildWordBlob(){
 
   const obra = getObraData();
   const medicao = getMedicaoInfo();
-  const reportTitle = medicao.ativa ? `RELATÓRIO FOTOGRÁFICO — ${medicao.nome.toUpperCase()}` : 'RELATÓRIO DE AVANÇO FÍSICO';
+  const reportTitle = medicao.ativa ? 'RELATÓRIO FOTOGRÁFICO — MEDIÇÃO' : 'RELATÓRIO DE AVANÇO FÍSICO';
   const NAVY = '0E2A3F', TEAL_TXT = '1C6E8C', MUTED = '5C6B73', INK = '16232B', LABEL_BG = 'F0EFEA', LIGHT_BORDER = 'DCD8CC';
 
   const noBorders = {
@@ -1401,7 +1407,7 @@ async function buildWordBlob(){
   if(obra.contrato) infoRows.push(infoRow('Contrato', obra.contrato));
   if(obra.protocolo) infoRows.push(infoRow('Protocolo', obra.protocolo));
   infoRows.push(infoRow('Empresa / Contratada', obra.contratada));
-  infoRows.push(infoRow('Data da vistoria', formatDateBR(obra.data)));
+  infoRows.push(infoRow('Data do relatório', formatDateBR(obra.data)));
   infoRows.push(infoRow('Fiscal do contrato', obra.responsavel));
   if(obra.obs) infoRows.push(infoRow('Observações gerais', obra.obs));
   infoRows.push(infoRow('Total de registros fotográficos', String(photos.length)));
