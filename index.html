@@ -419,7 +419,8 @@ document.getElementById('medicaoCheck').addEventListener('change', (e) => {
 function getMedicaoInfo(){
   const checked = document.getElementById('medicaoCheck').checked;
   const nome = document.getElementById('medicaoNome').value.trim();
-  return { ativa: checked && !!nome, nome };
+  const percentual = document.getElementById('medicaoPercentual').value.trim();
+  return { ativa: checked && !!nome, nome, percentual };
 }
 
 const dataInput = document.getElementById('data');
@@ -1186,6 +1187,7 @@ function buildPdfDoc(){
     y += lines.length * 5.5 + 6;
   };
   if(medicao.ativa) field('Medição', medicao.nome);
+  if(medicao.ativa && medicao.percentual) field('Percentual executado até esta medição', `${medicao.percentual}%`);
   field('Obra / Objeto', obra.nome);
   field('Centro', obra.centro);
   field('Endereço', obra.endereco);
@@ -1401,6 +1403,7 @@ async function buildWordBlob(){
 
   const infoRows = [];
   if(medicao.ativa) infoRows.push(infoRow('Medição', medicao.nome));
+  if(medicao.ativa && medicao.percentual) infoRows.push(infoRow('Percentual executado até esta medição', `${medicao.percentual}%`));
   infoRows.push(infoRow('Obra / Objeto', obra.nome));
   infoRows.push(infoRow('Centro', obra.centro));
   infoRows.push(infoRow('Endereço', obra.endereco));
