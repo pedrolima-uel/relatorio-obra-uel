@@ -341,6 +341,7 @@
       <button class="btn-sm" id="btnLoadCloud">☁ Carregar fotos desta data</button>
       <button class="btn-sm primary" id="btnFinalizar">☁ Finalizar vistoria (enviar fotos)</button>
       <button class="btn-sm danger" id="btnDownloadSelected">⬇ Baixar selecionadas</button>
+      <button class="btn-sm danger" id="btnDeleteSelected" style="display:none; background:var(--danger); color:white;">🗑 DELETAR</button>
     </div>
     <div class="hint">Use a mesma obra e a mesma data em outro aparelho pra continuar de onde parou. "Finalizar vistoria" envia as fotos ainda não enviadas pro Google Drive.</div>
 
@@ -708,6 +709,22 @@ function readFile(file, source){
   reader.readAsDataURL(file);
 }
 
+async function deletePhotoFromDriveIfNeeded(p){
+  if(!p.uploaded || !p.driveId) return { ok: true };
+  try{
+    const res = await fetch(SHEETS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deletePhoto', token: SHEETS_API_TOKEN, fileId: p.driveId })
+    });
+    const result = await res.json();
+    if(result.error) throw new Error(result.error);
+    return { ok: true };
+  }catch(e){
+    return { ok: false };
+  }
+}
+
 async function deletePhoto(id){
   const p = photos.find(p => p.id === id);
   if(!p) return;
@@ -716,17 +733,11 @@ async function deletePhoto(id){
     if(!confirm('Esta foto já está salva no Google Drive. Excluir vai apagá-la PERMANENTEMENTE de lá também, não só desta tela. Confirma?')) return;
     cloudStatusEl.textContent = 'Excluindo foto do Drive...';
     cloudStatusEl.className = 'status';
-    try{
-      const res = await fetch(SHEETS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'deletePhoto', token: SHEETS_API_TOKEN, fileId: p.driveId })
-      });
-      const result = await res.json();
-      if(result.error) throw new Error(result.error);
+    const result = await deletePhotoFromDriveIfNeeded(p);
+    if(result.ok){
       cloudStatusEl.textContent = '✓ Foto excluída permanentemente do Drive.';
       cloudStatusEl.className = 'status ok';
-    }catch(e){
+    }else{
       cloudStatusEl.textContent = '⚠ Não foi possível excluir do Drive agora. A foto foi removida só desta tela.';
       cloudStatusEl.className = 'status err';
     }
@@ -735,6 +746,32 @@ async function deletePhoto(id){
   photos = photos.filter(p => p.id !== id);
   renderGallery();
 }
+
+document.getElementById('btnDeleteSelected').addEventListener('click', async () => {
+  const selected = photos.filter(p => p.selected);
+  if(selected.length === 0) return;
+
+  const temNaNuvem = selected.some(p => p.uploaded && p.driveId);
+  const aviso = temNaNuvem
+    ? `Tem certeza que deseja excluir ${selected.length} foto(s) selecionada(s)? As que já estão no Google Drive serão excluídas PERMANENTEMENTE de lá também, sem volta.`
+    : `Tem certeza que deseja excluir ${selected.length} foto(s) selecionada(s)?`;
+  if(!confirm(aviso)) return;
+
+  let removidas = 0;
+  for(const p of selected){
+    if(p.uploaded && p.driveId){
+      cloudStatusEl.textContent = `Excluindo foto ${removidas+1} de ${selected.length}...`;
+      cloudStatusEl.className = 'status';
+      await deletePhotoFromDriveIfNeeded(p);
+    }
+    removidas++;
+  }
+  const idsSelecionados = new Set(selected.map(p => p.id));
+  photos = photos.filter(p => !idsSelecionados.has(p.id));
+  renderGallery();
+  cloudStatusEl.textContent = `✓ ${removidas} foto(s) excluída(s).`;
+  cloudStatusEl.className = 'status ok';
+});
 
 /* ---------------- FOTOS: SINCRONIZAÇÃO COM GOOGLE DRIVE ---------------- */
 
@@ -1059,6 +1096,10 @@ function syncSelectAllCheckbox(){
   const selectAllEl = document.getElementById('selectAllCheck');
   if(!selectAllEl) return;
   selectAllEl.checked = photos.length > 0 && photos.every(p => p.selected);
+
+  const btnDelete = document.getElementById('btnDeleteSelected');
+  const temSelecionadas = photos.some(p => p.selected);
+  btnDelete.style.display = temSelecionadas ? 'inline-flex' : 'none';
 }
 
 document.getElementById('selectAllCheck').addEventListener('change', (e) => {
