@@ -1131,7 +1131,7 @@ function updateCaption(id, value){
 
 async function syncCaptionToDrive(p){
   try{
-    await fetch(SHEETS_API_URL, {
+    const res = await fetch(SHEETS_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
@@ -1143,10 +1143,17 @@ async function syncCaptionToDrive(p){
         lng: p.lng
       })
     });
+    const result = await res.json();
+    if(result.error){
+      cloudStatusEl.textContent = `⚠ O Drive recusou a atualização da legenda: ${result.error}`;
+      cloudStatusEl.className = 'status err';
+      return;
+    }
     cloudStatusEl.textContent = '✓ Legenda sincronizada com o Drive.';
     cloudStatusEl.className = 'status ok';
   }catch(e){
-    // Falha silenciosa — a legenda continua valendo nesta tela; tenta de novo na próxima edição.
+    cloudStatusEl.textContent = '⚠ Não foi possível sincronizar a legenda agora (sem conexão?). Tenta de novo mais tarde.';
+    cloudStatusEl.className = 'status err';
   }
 }
 
