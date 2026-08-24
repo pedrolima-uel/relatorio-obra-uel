@@ -814,6 +814,13 @@ function formatFileTime(d){
   return `${h}${m}`;
 }
 
+function buildPhotoFilename(ctx, p, seq){
+  const contratoToken = (ctx.contratoNumero || ctx.contratoAno)
+    ? `${ctx.contratoNumero || 'SN'}_${ctx.contratoAno || 'SA'}`
+    : (ctx.protocolo ? sanitizeFileToken(ctx.protocolo) : 'SC');
+  return `${String(seq).padStart(2,'0')}_${sanitizeFileToken(ctx.centro)}_${contratoToken}_${ctx.data}_${formatFileTime(p.timestamp)}.jpg`;
+}
+
 document.getElementById('btnFinalizar').addEventListener('click', async () => {
   const ctx = getVistoriaContext();
   if(!ctx.ok){ cloudStatusEl.textContent = ctx.msg; cloudStatusEl.className = 'status err'; return; }
@@ -832,10 +839,7 @@ document.getElementById('btnFinalizar').addEventListener('click', async () => {
     try{
       const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
       const seq = photos.indexOf(p) + 1;
-      const contratoToken = (ctx.contratoNumero || ctx.contratoAno)
-        ? `${ctx.contratoNumero || 'SN'}_${ctx.contratoAno || 'SA'}`
-        : (ctx.protocolo ? sanitizeFileToken(ctx.protocolo) : 'SC');
-      const filename = `${String(seq).padStart(2,'0')}_${sanitizeFileToken(ctx.centro)}_${contratoToken}_${ctx.data}_${formatFileTime(p.timestamp)}.jpg`;
+      const filename = buildPhotoFilename(ctx, p, seq);
       const res = await fetch(SHEETS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -1016,21 +1020,31 @@ document.getElementById('btnDownloadSelected').addEventListener('click', async (
     cloudStatusEl.className = 'status err';
     return;
   }
+  const ctx = getVistoriaContext();
+  if(!ctx.ok){
+    cloudStatusEl.textContent = ctx.msg;
+    cloudStatusEl.className = 'status err';
+    return;
+  }
   cloudStatusEl.textContent = 'Preparando arquivo com as fotos selecionadas...';
   cloudStatusEl.className = 'status';
   try{
     if(selected.length === 1){
       const p = selected[0];
-      downloadBlob(dataUrlToBlob(p.dataUrl), `foto_${String(photos.indexOf(p)+1).padStart(2,'0')}.jpg`);
+      const seq = photos.indexOf(p) + 1;
+      downloadBlob(dataUrlToBlob(p.dataUrl), buildPhotoFilename(ctx, p, seq));
     }else{
       const zip = new JSZip();
       selected.forEach((p) => {
-        const idx = photos.indexOf(p) + 1;
+        const seq = photos.indexOf(p) + 1;
         const { base64 } = dataUrlToBase64(p.dataUrl);
-        zip.file(`foto_${String(idx).padStart(2,'0')}.jpg`, base64, { base64: true });
+        zip.file(buildPhotoFilename(ctx, p, seq), base64, { base64: true });
       });
       const content = await zip.generateAsync({ type: 'blob' });
-      downloadBlob(content, `fotos_selecionadas_${Date.now()}.zip`);
+      const contratoToken = (ctx.contratoNumero || ctx.contratoAno)
+        ? `${ctx.contratoNumero || 'SN'}_${ctx.contratoAno || 'SA'}`
+        : (ctx.protocolo ? sanitizeFileToken(ctx.protocolo) : 'SC');
+      downloadBlob(content, `fotos_${sanitizeFileToken(ctx.centro)}_${contratoToken}_${ctx.data}.zip`);
     }
     cloudStatusEl.textContent = `✓ ${selected.length} foto(s) baixada(s).`;
     cloudStatusEl.className = 'status ok';
