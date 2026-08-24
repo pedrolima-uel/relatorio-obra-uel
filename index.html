@@ -367,6 +367,7 @@
 
     <div class="status" id="cloudStatus"></div>
 
+    <div id="outrasObrasNotice" style="display:none; background:#FFF4E5; border:1px solid #F0C36D; border-radius:8px; padding:10px 14px; font-size:13px; color:#7A5A00; margin-bottom:12px;"></div>
     <div id="photoGrid" class="photo-grid"></div>
     <div id="emptyState" class="empty-state">Nenhuma foto adicionada ainda.</div>
   </section>
@@ -530,6 +531,7 @@ function clearObraForm(){
   document.getElementById('responsavel').value = '';
   obraSelect.value = '';
   document.getElementById('btnExcluirObra').disabled = true;
+  renderGallery();
 }
 
 function fillObraForm(obra){
@@ -543,6 +545,7 @@ function fillObraForm(obra){
   document.getElementById('contratada').value = obra.contratada || '';
   document.getElementById('responsavel').value = obra.responsavel || '';
   document.getElementById('btnExcluirObra').disabled = false;
+  renderGallery();
 }
 
 obraSelect.addEventListener('change', () => {
@@ -671,7 +674,8 @@ function readFile(file, source){
           uploaded: false,
           lat: lat,
           lng: lng,
-          selected: false
+          selected: false,
+          obraTag: captureObraTag()
         });
         renderGallery();
       };
@@ -797,6 +801,45 @@ function getVistoriaContext(){
   return { ok: true, obraId: currentObraId, obraNome: nome, centro, contratoNumero, contratoAno, protocolo, data };
 }
 
+// Mesmos dados, mas sem exigir vínculo com a planilha/nuvem — usado só pra nomear
+// arquivos baixados no próprio aparelho, que funciona mesmo sem internet.
+function getLocalNamingContext(){
+  return {
+    centro: document.getElementById('centro').value.trim(),
+    contratoNumero: document.getElementById('contratoNumero').value.trim(),
+    contratoAno: document.getElementById('contratoAno').value.trim(),
+    protocolo: document.getElementById('protocolo').value.trim(),
+    data: document.getElementById('data').value || getBrasiliaDateString()
+  };
+}
+
+// Marca cada foto com a obra em que foi tirada, mesmo que a obra ainda não
+// tenha sido salva na planilha (sem sinal). Isso evita misturar fotos de
+// obras diferentes se o fiscal trocar de obra sem finalizar a anterior.
+function captureObraTag(){
+  const nome = document.getElementById('nome').value.trim();
+  const centro = document.getElementById('centro').value.trim();
+  const contratoNumero = document.getElementById('contratoNumero').value.trim();
+  const contratoAno = document.getElementById('contratoAno').value.trim();
+  const protocolo = document.getElementById('protocolo').value.trim();
+  const data = document.getElementById('data').value || getBrasiliaDateString();
+  const obraId = currentObraId || ('local_' + sanitizeFileToken(nome || 'obra'));
+  return { obraId, obraNome: nome, centro, contratoNumero, contratoAno, protocolo, data };
+}
+
+function currentObraTagKey(){
+  const nome = document.getElementById('nome').value.trim();
+  return currentObraId || ('local_' + sanitizeFileToken(nome || 'obra'));
+}
+
+function photosByObraKey(key){
+  return photos.filter(p => (p.obraTag ? p.obraTag.obraId : 'sem_obra') === key);
+}
+
+function photosDaObraAtual(){
+  return photosByObraKey(currentObraTagKey());
+}
+
 function sanitizeFileToken(text){
   return (text || 'Centro')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
@@ -822,9 +865,6 @@ function buildPhotoFilename(ctx, p, seq){
 }
 
 document.getElementById('btnFinalizar').addEventListener('click', async () => {
-  const ctx = getVistoriaContext();
-  if(!ctx.ok){ cloudStatusEl.textContent = ctx.msg; cloudStatusEl.className = 'status err'; return; }
-
   const pending = photos.filter(p => !p.uploaded);
   if(pending.length === 0){
     cloudStatusEl.textContent = 'Todas as fotos já foram enviadas para o Drive.';
@@ -832,23 +872,29 @@ document.getElementById('btnFinalizar').addEventListener('click', async () => {
     return;
   }
 
+  const obrasEnvolvidas = new Set(pending.map(p => (p.obraTag || captureObraTag()).obraId)).size;
+  if(obrasEnvolvidas > 1){
+    cloudStatusEl.textContent = `Enviando fotos de ${obrasEnvolvidas} obras diferentes desta sessão — cada uma vai pra pasta certa automaticamente.`;
+  }
+
   let sent = 0;
   for(const p of pending){
+    const tag = p.obraTag || captureObraTag();
     cloudStatusEl.textContent = `Enviando foto ${sent+1} de ${pending.length}...`;
     cloudStatusEl.className = 'status';
     try{
       const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
-      const seq = photos.indexOf(p) + 1;
-      const filename = buildPhotoFilename(ctx, p, seq);
+      const seq = photosByObraKey(tag.obraId).indexOf(p) + 1;
+      const filename = buildPhotoFilename(tag, p, seq);
       const res = await fetch(SHEETS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'uploadPhoto',
           token: SHEETS_API_TOKEN,
-          obraId: ctx.obraId,
-          obraNome: ctx.obraNome,
-          data: ctx.data,
+          obraId: tag.obraId,
+          obraNome: tag.obraNome,
+          data: tag.data,
           imageBase64: base64,
           mimeType,
           caption: p.caption,
@@ -922,7 +968,8 @@ document.getElementById('btnLoadCloud').addEventListener('click', async () => {
         uploaded: true,
         lat: photoData.lat || null,
         lng: photoData.lng || null,
-        selected: false
+        selected: false,
+        obraTag: { obraId: ctx.obraId, obraNome: ctx.obraNome, centro: ctx.centro, contratoNumero: ctx.contratoNumero, contratoAno: ctx.contratoAno, protocolo: ctx.protocolo, data: ctx.data }
       });
       loaded++;
       renderGallery();
@@ -1000,7 +1047,16 @@ document.getElementById('btnLoadRange').addEventListener('click', async () => {
         uploaded: true,
         lat: photoData.lat || null,
         lng: photoData.lng || null,
-        selected: false
+        selected: false,
+        obraTag: {
+          obraId: currentObraId,
+          obraNome: nome,
+          centro: document.getElementById('centro').value.trim(),
+          contratoNumero: document.getElementById('contratoNumero').value.trim(),
+          contratoAno: document.getElementById('contratoAno').value.trim(),
+          protocolo: document.getElementById('protocolo').value.trim(),
+          data: item.data || startDate
+        }
       });
       loaded++;
       renderGallery();
@@ -1020,23 +1076,19 @@ document.getElementById('btnDownloadSelected').addEventListener('click', async (
     cloudStatusEl.className = 'status err';
     return;
   }
-  const ctx = getVistoriaContext();
-  if(!ctx.ok){
-    cloudStatusEl.textContent = ctx.msg;
-    cloudStatusEl.className = 'status err';
-    return;
-  }
+  const ctx = getLocalNamingContext();
+  const doObraAtual = photosDaObraAtual();
   cloudStatusEl.textContent = 'Preparando arquivo com as fotos selecionadas...';
   cloudStatusEl.className = 'status';
   try{
     if(selected.length === 1){
       const p = selected[0];
-      const seq = photos.indexOf(p) + 1;
+      const seq = doObraAtual.indexOf(p) + 1;
       downloadBlob(dataUrlToBlob(p.dataUrl), buildPhotoFilename(ctx, p, seq));
     }else{
       const zip = new JSZip();
       selected.forEach((p) => {
-        const seq = photos.indexOf(p) + 1;
+        const seq = doObraAtual.indexOf(p) + 1;
         const { base64 } = dataUrlToBase64(p.dataUrl);
         zip.file(buildPhotoFilename(ctx, p, seq), base64, { base64: true });
       });
@@ -1062,9 +1114,40 @@ function dataUrlToBlob(dataUrl){
   return new Blob([arr], { type: mimeType });
 }
 
+const captionSyncTimers = {};
+
 function updateCaption(id, value){
   const p = photos.find(p => p.id === id);
-  if(p) p.caption = value;
+  if(!p) return;
+  p.caption = value;
+
+  // Se a foto já está no Drive, reenvia a legenda pra lá também (com um pequeno
+  // atraso após parar de digitar), pra não perder a edição num recarregamento futuro.
+  if(p.uploaded && p.driveId){
+    clearTimeout(captionSyncTimers[id]);
+    captionSyncTimers[id] = setTimeout(() => syncCaptionToDrive(p), 900);
+  }
+}
+
+async function syncCaptionToDrive(p){
+  try{
+    await fetch(SHEETS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'updatePhotoCaption',
+        token: SHEETS_API_TOKEN,
+        fileId: p.driveId,
+        caption: p.caption,
+        lat: p.lat,
+        lng: p.lng
+      })
+    });
+    cloudStatusEl.textContent = '✓ Legenda sincronizada com o Drive.';
+    cloudStatusEl.className = 'status ok';
+  }catch(e){
+    // Falha silenciosa — a legenda continua valendo nesta tela; tenta de novo na próxima edição.
+  }
 }
 
 function fmtTs(d){
@@ -1074,8 +1157,19 @@ function fmtTs(d){
 
 function renderGallery(){
   photoGrid.innerHTML = '';
-  emptyState.style.display = photos.length ? 'none' : 'block';
-  photos.forEach((p, i) => {
+  const doObraAtual = photosDaObraAtual();
+  const outras = photos.length - doObraAtual.length;
+
+  const noticeEl = document.getElementById('outrasObrasNotice');
+  if(outras > 0){
+    noticeEl.style.display = 'block';
+    noticeEl.textContent = `⚠ Há ${outras} foto(s) de outra(s) obra(s) nesta sessão, aguardando envio. Elas não aparecem aqui, mas não foram perdidas — selecione a obra correspondente pra vê-las, ou use "Finalizar vistoria" que envia tudo, de todas as obras, corretamente.`;
+  }else{
+    noticeEl.style.display = 'none';
+  }
+
+  emptyState.style.display = doObraAtual.length ? 'none' : 'block';
+  doObraAtual.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'photo-card';
     const coords = formatCoords(p.lat, p.lng);
@@ -1109,15 +1203,16 @@ function renderGallery(){
 function syncSelectAllCheckbox(){
   const selectAllEl = document.getElementById('selectAllCheck');
   if(!selectAllEl) return;
-  selectAllEl.checked = photos.length > 0 && photos.every(p => p.selected);
+  const doObraAtual = photosDaObraAtual();
+  selectAllEl.checked = doObraAtual.length > 0 && doObraAtual.every(p => p.selected);
 
   const btnDelete = document.getElementById('btnDeleteSelected');
-  const temSelecionadas = photos.some(p => p.selected);
+  const temSelecionadas = doObraAtual.some(p => p.selected);
   btnDelete.style.display = temSelecionadas ? 'inline-flex' : 'none';
 }
 
 document.getElementById('selectAllCheck').addEventListener('change', (e) => {
-  photos.forEach(p => { p.selected = e.target.checked; });
+  photosDaObraAtual().forEach(p => { p.selected = e.target.checked; });
   renderGallery();
 });
 
@@ -1154,8 +1249,8 @@ function validate(){
     statusEl.className = 'status err';
     return false;
   }
-  if(photos.length === 0){
-    statusEl.textContent = '⚠ Adicione pelo menos uma foto antes de gerar o relatório.';
+  if(photosDaObraAtual().length === 0){
+    statusEl.textContent = '⚠ Adicione pelo menos uma foto desta obra antes de gerar o relatório.';
     statusEl.className = 'status err';
     return false;
   }
@@ -1192,6 +1287,7 @@ function buildPdfDoc(){
   const obra = getObraData();
   const medicao = getMedicaoInfo();
   const reportTitle = medicao.ativa ? 'RELATÓRIO FOTOGRÁFICO — MEDIÇÃO' : 'RELATÓRIO DE AVANÇO FÍSICO';
+  const fotosRelatorio = photosDaObraAtual();
   const pageW = 210, pageH = 297, margin = 16;
   const contentW = pageW - margin*2;
 
@@ -1259,7 +1355,7 @@ function buildPdfDoc(){
   doc.setFont('helvetica','italic');
   doc.setFontSize(9);
   doc.setTextColor(92,107,115);
-  doc.text(`Total de registros fotográficos: ${photos.length}`, margin, y);
+  doc.text(`Total de registros fotográficos: ${fotosRelatorio.length}`, margin, y);
 
   let pageNum = 1;
   const identificador = obra.contrato || obra.protocolo || '';
@@ -1290,7 +1386,7 @@ function buildPdfDoc(){
   let gridTop = gridMargin;
   let posInPage = 0;
 
-  photos.forEach((p, i) => {
+  fotosRelatorio.forEach((p, i) => {
     if(posInPage === 6){
       addFooter();
       doc.addPage();
@@ -1383,6 +1479,7 @@ async function buildWordBlob(){
   const obra = getObraData();
   const medicao = getMedicaoInfo();
   const reportTitle = medicao.ativa ? 'RELATÓRIO FOTOGRÁFICO — MEDIÇÃO' : 'RELATÓRIO DE AVANÇO FÍSICO';
+  const fotosRelatorio = photosDaObraAtual();
   const NAVY = '0E2A3F', TEAL_TXT = '1C6E8C', MUTED = '5C6B73', INK = '16232B', LABEL_BG = 'F0EFEA', LIGHT_BORDER = 'DCD8CC';
 
   const noBorders = {
@@ -1468,7 +1565,7 @@ async function buildWordBlob(){
   infoRows.push(infoRow('Data do relatório', formatDateBR(obra.data)));
   infoRows.push(infoRow('Fiscal do contrato', obra.responsavel));
   if(obra.obs) infoRows.push(infoRow('Observações gerais', obra.obs));
-  infoRows.push(infoRow('Total de registros fotográficos', String(photos.length)));
+  infoRows.push(infoRow('Total de registros fotográficos', String(fotosRelatorio.length)));
 
   const infoTable = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -1522,7 +1619,7 @@ async function buildWordBlob(){
     return out;
   };
 
-  const photoGroups = chunk(photos, 6);
+  const photoGroups = chunk(fotosRelatorio, 6);
   const bodyChildren = [ headerTable, new Paragraph({ text: '', spacing: { after: 200 } }), infoTable ];
 
   photoGroups.forEach((group, gi) => {
