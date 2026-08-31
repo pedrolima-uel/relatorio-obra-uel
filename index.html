@@ -1431,8 +1431,8 @@ function buildPdfDoc(){
     capY += capLines.length * captionLineH + 2.5;
 
     doc.setFont('courier','normal');
-    doc.setFontSize(6.5);
-    doc.setTextColor(140,140,140);
+    doc.setFontSize(7.2);
+    doc.setTextColor(80,90,97);
     doc.text(fmtTs(p.timestamp), cellX, capY);
     capY += 3.6;
 
@@ -1606,12 +1606,12 @@ async function buildWordBlob(){
           children: [ new TextRun({ text: p.caption || '(sem legenda)', size: 19, color: INK }) ]
         }),
         new Paragraph({
-          children: [ new TextRun({ text: fmtTs(p.timestamp), size: 15, color: '8C8C8C', font: 'Courier New' }) ]
+          children: [ new TextRun({ text: fmtTs(p.timestamp), size: 17, color: '505A61', font: 'Courier New' }) ]
         }),
         new Paragraph({
           children: [ new TextRun({
             text: coords ? `GPS: ${coords}` : 'GPS: não disponível',
-            size: 15, color: '8C8C8C', font: 'Courier New'
+            size: 17, color: '505A61', font: 'Courier New'
           }) ]
         })
       ]
