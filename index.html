@@ -1084,21 +1084,27 @@ document.getElementById('btnDownloadSelected').addEventListener('click', async (
     if(selected.length === 1){
       const p = selected[0];
       const seq = doObraAtual.indexOf(p) + 1;
-      downloadBlob(dataUrlToBlob(p.dataUrl), buildPhotoFilename(ctx, p, seq));
+      const stampedDataUrl = await stampPhoto(p, ctx);
+      downloadBlob(dataUrlToBlob(stampedDataUrl), buildPhotoFilename(ctx, p, seq));
     }else{
       const zip = new JSZip();
-      selected.forEach((p) => {
+      let processadas = 0;
+      for(const p of selected){
+        cloudStatusEl.textContent = `Carimbando foto ${processadas+1} de ${selected.length}...`;
         const seq = doObraAtual.indexOf(p) + 1;
-        const { base64 } = dataUrlToBase64(p.dataUrl);
-        zip.file(buildPhotoFilename(ctx, p, seq), base64, { base64: true });
-      });
+        const stampedDataUrl = await stampPhoto(p, ctx);
+        const { base64 } = dataUrlToBase64(stampedDataUrl);
+        zip.file(buildPhotoFilename(ctx, p, seq), base64, { base64: true, date: p.timestamp });
+        processadas++;
+      }
+      cloudStatusEl.textContent = 'Compactando arquivo...';
       const content = await zip.generateAsync({ type: 'blob' });
       const contratoToken = (ctx.contratoNumero || ctx.contratoAno)
         ? `${ctx.contratoNumero || 'SN'}_${ctx.contratoAno || 'SA'}`
         : (ctx.protocolo ? sanitizeFileToken(ctx.protocolo) : 'SC');
       downloadBlob(content, `fotos_${sanitizeFileToken(ctx.centro)}_${contratoToken}_${ctx.data}.zip`);
     }
-    cloudStatusEl.textContent = `✓ ${selected.length} foto(s) baixada(s).`;
+    cloudStatusEl.textContent = `✓ ${selected.length} foto(s) baixada(s) com carimbo de identificação.`;
     cloudStatusEl.className = 'status ok';
   }catch(e){
     cloudStatusEl.textContent = '⚠ Não foi possível gerar o arquivo agora.';
@@ -1160,6 +1166,57 @@ async function syncCaptionToDrive(p){
 function fmtTs(d){
   const tz = 'America/Sao_Paulo';
   return d.toLocaleDateString('pt-BR', { timeZone: tz }) + ' ' + d.toLocaleTimeString('pt-BR', { timeZone: tz, hour:'2-digit', minute:'2-digit' });
+}
+
+function stampPhoto(p, ctx){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const c = canvas.getContext('2d');
+      c.drawImage(img, 0, 0);
+
+      const obraLine = document.getElementById('nome').value.trim() || 'Obra não identificada';
+      const contratoLine = (ctx.contratoNumero || ctx.contratoAno)
+        ? `Contrato ${ctx.contratoNumero || 'SN'}/${ctx.contratoAno || 'SA'}`
+        : (ctx.protocolo ? `Protocolo ${ctx.protocolo}` : 'Contrato —');
+      const coords = formatCoords(p.lat, p.lng);
+      const gpsLine = coords ? `GPS: ${coords}` : 'GPS: não disponível';
+      const dateLine = fmtTs(p.timestamp);
+      const lines = [obraLine, contratoLine, gpsLine, dateLine];
+
+      const fontSize = Math.max(14, Math.round(canvas.width * 0.026));
+      const lineHeight = Math.round(fontSize * 1.35);
+      const padding = Math.round(fontSize * 0.7);
+
+      c.font = `bold ${fontSize}px Arial`;
+      const w0 = c.measureText(lines[0]).width;
+      c.font = `${fontSize}px Arial`;
+      const otherWidths = lines.slice(1).map(l => c.measureText(l).width);
+      const maxTextWidth = Math.max(w0, ...otherWidths);
+
+      const boxWidth = Math.min(canvas.width, maxTextWidth + padding * 2);
+      const boxHeight = lineHeight * lines.length + padding * 2 - (lineHeight - fontSize);
+      const boxX = 0;
+      const boxY = canvas.height - boxHeight;
+
+      c.fillStyle = 'rgba(0,0,0,0.6)';
+      c.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+      c.fillStyle = '#FFFFFF';
+      c.textBaseline = 'top';
+      lines.forEach((line, i) => {
+        c.font = i === 0 ? `bold ${fontSize}px Arial` : `${fontSize}px Arial`;
+        c.fillText(line, boxX + padding, boxY + padding + i * lineHeight, boxWidth - padding * 2);
+      });
+
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    img.onerror = () => resolve(p.dataUrl);
+    img.src = p.dataUrl;
+  });
 }
 
 function renderGallery(){
