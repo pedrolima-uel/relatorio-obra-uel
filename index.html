@@ -1187,7 +1187,7 @@ function stampPhoto(p, ctx){
       const dateLine = fmtTs(p.timestamp);
       const lines = [obraLine, contratoLine, gpsLine, dateLine];
 
-      const fontSize = Math.max(14, Math.round(canvas.width * 0.026));
+      const fontSize = Math.max(11, Math.round(canvas.width * 0.019));
       const lineHeight = Math.round(fontSize * 1.35);
       const padding = Math.round(fontSize * 0.7);
 
@@ -1202,7 +1202,7 @@ function stampPhoto(p, ctx){
       const boxX = 0;
       const boxY = canvas.height - boxHeight;
 
-      c.fillStyle = 'rgba(0,0,0,0.6)';
+      c.fillStyle = 'rgba(0,0,0,0.4)';
       c.fillRect(boxX, boxY, boxWidth, boxHeight);
 
       c.fillStyle = '#FFFFFF';
