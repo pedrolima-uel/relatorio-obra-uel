@@ -372,6 +372,7 @@
     <div id="emptyState" class="empty-state">Nenhuma foto adicionada ainda.</div>
   </section>
 
+  <div id="reportSelectionNotice" style="text-align:center; font-size:13px; font-weight:600; color:var(--blueprint); margin-bottom:8px;"></div>
   <div class="actions" style="flex-direction:column;">
     <div style="display:flex; gap:12px; flex-wrap:wrap;">
       <button class="btn btn-pdf" id="btnPdf">⬇ Baixar PDF</button>
@@ -840,6 +841,12 @@ function photosDaObraAtual(){
   return photosByObraKey(currentObraTagKey());
 }
 
+function fotosParaRelatorio(){
+  const daObra = photosDaObraAtual();
+  const marcadas = daObra.filter(p => p.selected);
+  return marcadas.length > 0 ? marcadas : daObra;
+}
+
 function sanitizeFileToken(text){
   return (text || 'Centro')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
@@ -1216,6 +1223,14 @@ function syncSelectAllCheckbox(){
   const btnDelete = document.getElementById('btnDeleteSelected');
   const temSelecionadas = doObraAtual.some(p => p.selected);
   btnDelete.style.display = temSelecionadas ? 'inline-flex' : 'none';
+
+  const noticeEl = document.getElementById('reportSelectionNotice');
+  if(noticeEl){
+    const marcadas = doObraAtual.filter(p => p.selected).length;
+    noticeEl.textContent = marcadas > 0
+      ? `📌 O relatório sairá só com as ${marcadas} foto(s) marcada(s) — desmarque todas pra voltar a incluir todas.`
+      : '';
+  }
 }
 
 document.getElementById('selectAllCheck').addEventListener('change', (e) => {
@@ -1294,7 +1309,7 @@ function buildPdfDoc(){
   const obra = getObraData();
   const medicao = getMedicaoInfo();
   const reportTitle = medicao.ativa ? 'RELATÓRIO FOTOGRÁFICO — MEDIÇÃO' : 'RELATÓRIO DE AVANÇO FÍSICO';
-  const fotosRelatorio = photosDaObraAtual();
+  const fotosRelatorio = fotosParaRelatorio();
   const pageW = 210, pageH = 297, margin = 16;
   const contentW = pageW - margin*2;
 
@@ -1486,7 +1501,7 @@ async function buildWordBlob(){
   const obra = getObraData();
   const medicao = getMedicaoInfo();
   const reportTitle = medicao.ativa ? 'RELATÓRIO FOTOGRÁFICO — MEDIÇÃO' : 'RELATÓRIO DE AVANÇO FÍSICO';
-  const fotosRelatorio = photosDaObraAtual();
+  const fotosRelatorio = fotosParaRelatorio();
   const NAVY = '0E2A3F', TEAL_TXT = '1C6E8C', MUTED = '5C6B73', INK = '16232B', LABEL_BG = 'F0EFEA', LIGHT_BORDER = 'DCD8CC';
 
   const noBorders = {
