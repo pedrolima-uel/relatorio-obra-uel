@@ -31,7 +31,11 @@
     --white: #FFFFFF;
   }
   *{box-sizing:border-box;}
+  html{
+    overscroll-behavior-y: none;
+  }
   body{
+    overscroll-behavior-y: contain;
     margin:0;
     font-family:'Inter',sans-serif;
     background:var(--paper);
@@ -333,7 +337,7 @@
 
   <section class="card">
     <h2><span class="tag">03</span> Fotos da vistoria</h2>
-    <label class="add-photo-btn" for="fileInput">📷 Adicionar fotos</label>
+    <label class="add-photo-btn" for="fileInput" id="addPhotoLabel">📷 Adicionar fotos</label>
     <input type="file" id="fileInput" accept="image/*" capture="environment" multiple>
     <div class="hint">No celular, isso abre a câmera direto. <strong>Sempre fotografe na horizontal (paisagem)</strong> — o relatório é montado em grade de 6 fotos por página nesse formato. Se você permitir acesso à localização, cada foto é georreferenciada automaticamente.</div>
 
@@ -355,7 +359,7 @@
         <input type="date" id="rangeEnd">
       </div>
       <button class="btn-sm" id="btnLoadRange">☁ Carregar fotos do período</button>
-      <label class="btn-sm" for="uploadInput" style="cursor:pointer;">📁 Enviar fotos do aparelho</label>
+      <label class="btn-sm" for="uploadInput" id="uploadPhotoLabel" style="cursor:pointer;">📁 Enviar fotos do aparelho</label>
       <input type="file" id="uploadInput" accept="image/*" multiple style="display:none;">
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:600; color:var(--navy-2); margin-left:6px;">
         <input type="checkbox" id="selectAllCheck" style="width:16px; height:16px; accent-color:var(--blueprint);">
@@ -398,6 +402,17 @@ const fileInput = document.getElementById('fileInput');
 const photoGrid = document.getElementById('photoGrid');
 const emptyState = document.getElementById('emptyState');
 const statusEl = document.getElementById('status');
+
+function bloquearSemObra(e){
+  if(!currentObraId){
+    e.preventDefault();
+    obraStatusEl.textContent = '⚠ Selecione ou cadastre uma obra antes de adicionar fotos.';
+    obraStatusEl.className = 'status err';
+    document.getElementById('obraSelect').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+document.getElementById('addPhotoLabel').addEventListener('click', bloquearSemObra);
+document.getElementById('uploadPhotoLabel').addEventListener('click', bloquearSemObra);
 const obraStatusEl = document.getElementById('obraStatus');
 const obraSelect = document.getElementById('obraSelect');
 const cloudStatusEl = document.getElementById('cloudStatus');
