@@ -949,11 +949,12 @@ async function executarFinalizacao(automatico){
 
 document.getElementById('btnFinalizar').addEventListener('click', () => executarFinalizacao(false));
 
-// Envio automático: a cada 5 segundos, se houver fotos pendentes e sinal de internet.
+// Envio automático: a cada 5 segundos, se houver fotos pendentes.
+// (Não checamos navigator.onLine porque essa informação não é confiável em
+// vários navegadores/celulares — se não houver internet de verdade, a própria
+// tentativa de envio falha sozinha e tenta de novo no próximo ciclo.)
 setInterval(() => {
-  if(navigator.onLine){
-    executarFinalizacao(true);
-  }
+  executarFinalizacao(true);
 }, 5000);
 
 document.getElementById('btnLoadCloud').addEventListener('click', async () => {
