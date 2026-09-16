@@ -871,13 +871,26 @@ function buildPhotoFilename(ctx, p, seq){
   return `${String(seq).padStart(2,'0')}_${sanitizeFileToken(ctx.centro)}_${contratoToken}_${ctx.data}_${formatFileTime(p.timestamp)}.jpg`;
 }
 
-document.getElementById('btnFinalizar').addEventListener('click', async () => {
-  const pending = photos.filter(p => !p.uploaded);
-  if(pending.length === 0){
-    cloudStatusEl.textContent = 'Todas as fotos já foram enviadas para o Drive.';
-    cloudStatusEl.className = 'status ok';
+let finalizandoVistoria = false;
+
+async function executarFinalizacao(automatico){
+  if(finalizandoVistoria){
     return;
   }
+  const pending = photos.filter(p => !p.uploaded);
+  if(pending.length === 0){
+    if(!automatico){
+      cloudStatusEl.textContent = 'Todas as fotos já foram enviadas para o Drive.';
+      cloudStatusEl.className = 'status ok';
+    }
+    return;
+  }
+
+  finalizandoVistoria = true;
+  const btnFinalizarEl = document.getElementById('btnFinalizar');
+  btnFinalizarEl.disabled = true;
+  const textoOriginalBtn = btnFinalizarEl.textContent;
+  btnFinalizarEl.textContent = '☁ Enviando...';
 
   const obrasEnvolvidas = new Set(pending.map(p => (p.obraTag || captureObraTag()).obraId)).size;
   if(obrasEnvolvidas > 1){
@@ -885,46 +898,63 @@ document.getElementById('btnFinalizar').addEventListener('click', async () => {
   }
 
   let sent = 0;
-  for(const p of pending){
-    const tag = p.obraTag || captureObraTag();
-    cloudStatusEl.textContent = `Enviando foto ${sent+1} de ${pending.length}...`;
-    cloudStatusEl.className = 'status';
-    try{
-      const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
-      const seq = photosByObraKey(tag.obraId).indexOf(p) + 1;
-      const filename = buildPhotoFilename(tag, p, seq);
-      const res = await fetch(SHEETS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'uploadPhoto',
-          token: SHEETS_API_TOKEN,
-          obraId: tag.obraId,
-          obraNome: tag.obraNome,
-          data: tag.data,
-          imageBase64: base64,
-          mimeType,
-          caption: p.caption,
-          lat: p.lat,
-          lng: p.lng,
-          filename
-        })
-      });
-      const result = await res.json();
-      if(result.error) throw new Error(result.error);
-      p.uploaded = true;
-      p.driveId = result.id;
-      sent++;
-      renderGallery();
-    }catch(e){
-      cloudStatusEl.textContent = `⚠ Falha ao enviar a foto ${sent+1}. Verifique a conexão e tente "Finalizar vistoria" de novo — as já enviadas não serão duplicadas.`;
-      cloudStatusEl.className = 'status err';
-      return;
+  try{
+    for(const p of pending){
+      const tag = p.obraTag || captureObraTag();
+      cloudStatusEl.textContent = `${automatico ? '☁ Envio automático' : 'Enviando'}: foto ${sent+1} de ${pending.length}...`;
+      cloudStatusEl.className = 'status';
+      try{
+        const { mimeType, base64 } = dataUrlToBase64(p.dataUrl);
+        const seq = photosByObraKey(tag.obraId).indexOf(p) + 1;
+        const filename = buildPhotoFilename(tag, p, seq);
+        const res = await fetch(SHEETS_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'uploadPhoto',
+            token: SHEETS_API_TOKEN,
+            obraId: tag.obraId,
+            obraNome: tag.obraNome,
+            data: tag.data,
+            imageBase64: base64,
+            mimeType,
+            caption: p.caption,
+            lat: p.lat,
+            lng: p.lng,
+            filename
+          })
+        });
+        const result = await res.json();
+        if(result.error) throw new Error(result.error);
+        p.uploaded = true;
+        p.driveId = result.id;
+        sent++;
+        renderGallery();
+      }catch(e){
+        cloudStatusEl.textContent = automatico
+          ? `⚠ Envio automático falhou nesta tentativa (sem sinal?). Vai tentar de novo em instantes.`
+          : `⚠ Falha ao enviar a foto ${sent+1}. Verifique a conexão e tente "Finalizar vistoria" de novo — as já enviadas não serão duplicadas.`;
+        cloudStatusEl.className = 'status err';
+        return;
+      }
     }
+    cloudStatusEl.textContent = `✓ ${automatico ? 'Envio automático concluído' : 'Vistoria finalizada'} — ${sent} foto(s) enviada(s) para o Drive.`;
+    cloudStatusEl.className = 'status ok';
+  } finally {
+    finalizandoVistoria = false;
+    btnFinalizarEl.disabled = false;
+    btnFinalizarEl.textContent = textoOriginalBtn;
   }
-  cloudStatusEl.textContent = `✓ Vistoria finalizada — ${sent} foto(s) enviada(s) para o Drive.`;
-  cloudStatusEl.className = 'status ok';
-});
+}
+
+document.getElementById('btnFinalizar').addEventListener('click', () => executarFinalizacao(false));
+
+// Envio automático: a cada 5 segundos, se houver fotos pendentes e sinal de internet.
+setInterval(() => {
+  if(navigator.onLine){
+    executarFinalizacao(true);
+  }
+}, 5000);
 
 document.getElementById('btnLoadCloud').addEventListener('click', async () => {
   const ctx = getVistoriaContext();
