@@ -862,12 +862,38 @@ function fotosParaRelatorio(){
   return marcadas.length > 0 ? marcadas : daObra;
 }
 
-function sanitizeFileToken(text){
-  return (text || 'Centro')
+function sanitizeFileToken(text, fallback = 'Centro'){
+  return (text || fallback)
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
     .replace(/[^a-zA-Z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
-    .slice(0, 40) || 'Centro';
+    .slice(0, 40) || fallback;
+}
+
+// Extrai só o identificador/número da medição, removendo a palavra "Medição" do início
+// (ex.: "Medição 01" -> "01"), pra não duplicar a palavra no nome do arquivo.
+function extrairIdentificadorMedicao(nome){
+  const semAcento = (nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const resto = semAcento.replace(/^\s*medicao\s*n?º?\.?\s*/i, '').trim();
+  return resto || nome || '';
+}
+
+// Monta o nome do relatório no padrão:
+// RVO: Relatorio_RVO_(centro)_(contrato)_(ano)_(1º nome da empresa)
+// Medição: Relatorio_Medicao_(nº medição)_(centro)_(contrato)_(ano)_(1º nome da empresa)
+function buildReportFilename(obra, medicao){
+  const centro = sanitizeFileToken(obra.centro, '');
+  const primeiraPalavraEmpresa = (obra.contratada || '').trim().split(/\s+/)[0] || '';
+  const empresa = sanitizeFileToken(primeiraPalavraEmpresa, '');
+  const temContrato = obra.contratoNumero || obra.contratoAno;
+  const contratoNum = temContrato ? obra.contratoNumero : (obra.protocolo ? sanitizeFileToken(obra.protocolo, '') : '');
+  const contratoAno = temContrato ? obra.contratoAno : '';
+
+  const segments = medicao.ativa
+    ? ['Relatorio', 'Medicao', sanitizeFileToken(extrairIdentificadorMedicao(medicao.nome), ''), centro, contratoNum, contratoAno, empresa]
+    : ['Relatorio', 'RVO', centro, contratoNum, contratoAno, empresa];
+
+  return segments.filter(Boolean).join('_');
 }
 
 function formatFileTime(d){
@@ -1504,8 +1530,7 @@ function buildPdfDoc(){
   });
   addFooter();
 
-  const baseName = medicao.ativa ? `medicao_${medicao.nome}` : 'rvo';
-  const filename = `relatorio_${baseName}_${obra.nome.replace(/[^a-zA-Z0-9]+/g,'_').slice(0,40)}.pdf`.replace(/[^a-zA-Z0-9._]+/g,'_');
+  const filename = `${buildReportFilename(obra, medicao)}.pdf`;
   return { doc, filename };
 }
 
@@ -1715,8 +1740,7 @@ async function buildWordBlob(){
   });
 
   const blob = await Packer.toBlob(doc);
-  const baseName = medicao.ativa ? `medicao_${medicao.nome}` : 'rvo';
-  const filename = `relatorio_${baseName}_${obra.nome.replace(/[^a-zA-Z0-9]+/g,'_').slice(0,40)}.docx`.replace(/[^a-zA-Z0-9._]+/g,'_');
+  const filename = `${buildReportFilename(obra, medicao)}.docx`;
   return { blob, filename };
 }
 
