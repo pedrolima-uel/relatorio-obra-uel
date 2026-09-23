@@ -881,6 +881,12 @@ function extrairIdentificadorMedicao(nome){
 // Monta o nome do relatório no padrão:
 // RVO: Relatorio_RVO_(centro)_(contrato)_(ano)_(1º nome da empresa)
 // Medição: Relatorio_Medicao_(nº medição)_(centro)_(contrato)_(ano)_(1º nome da empresa)
+function formatDateFileToken(isoDate){
+  if(!isoDate) return '';
+  const [y,m,d] = isoDate.split('-');
+  return `${d}.${m}.${y}`;
+}
+
 function buildReportFilename(obra, medicao){
   const centro = sanitizeFileToken(obra.centro, '');
   const primeiraPalavraEmpresa = (obra.contratada || '').trim().split(/\s+/)[0] || '';
@@ -888,10 +894,11 @@ function buildReportFilename(obra, medicao){
   const temContrato = obra.contratoNumero || obra.contratoAno;
   const contratoNum = temContrato ? obra.contratoNumero : (obra.protocolo ? sanitizeFileToken(obra.protocolo, '') : '');
   const contratoAno = temContrato ? obra.contratoAno : '';
+  const dataToken = formatDateFileToken(obra.data);
 
   const segments = medicao.ativa
-    ? ['Relatorio', 'Medicao', sanitizeFileToken(extrairIdentificadorMedicao(medicao.nome), ''), centro, contratoNum, contratoAno, empresa]
-    : ['Relatorio', 'RVO', centro, contratoNum, contratoAno, empresa];
+    ? ['Relatorio', 'Medicao', sanitizeFileToken(extrairIdentificadorMedicao(medicao.nome), ''), centro, contratoNum, contratoAno, empresa, dataToken]
+    : ['Relatorio', 'RVO', centro, contratoNum, contratoAno, empresa, dataToken];
 
   return segments.filter(Boolean).join('_');
 }
