@@ -1296,6 +1296,7 @@ async function suggestCaption(p, card, btn){
     });
     const result = await res.json();
     if(result.error) throw new Error(result.error);
+    if(!result.description) throw new Error('o Apps Script ainda está na versão antiga — publique a nova versão da implantação.');
     textarea.value = result.description;
     updateCaption(p.id, result.description);
   }catch(e){
