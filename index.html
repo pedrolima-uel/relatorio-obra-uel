@@ -1255,6 +1255,57 @@ async function syncCaptionToDrive(p){
   }
 }
 
+
+function downscaleDataUrl(dataUrl, maxDim){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * scale);
+      c.height = Math.round(img.naturalHeight * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+async function suggestCaption(p, card, btn){
+  const textarea = card.querySelector('textarea');
+  if(textarea.value.trim() && !confirm('Já existe uma legenda. Substituir pela sugestão da IA?')) return;
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Analisando…';
+  try{
+    const small = await downscaleDataUrl(p.dataUrl, 1024);
+    const { mimeType, base64 } = dataUrlToBase64(small);
+    const tag = p.obraTag || captureObraTag();
+    const res = await fetch(SHEETS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'describePhoto',
+        token: SHEETS_API_TOKEN,
+        imageBase64: base64,
+        mimeType,
+        obraNome: tag.obraNome,
+        centro: tag.centro
+      })
+    });
+    const result = await res.json();
+    if(result.error) throw new Error(result.error);
+    textarea.value = result.description;
+    updateCaption(p.id, result.description);
+  }catch(e){
+    alert('Não foi possível sugerir a descrição: ' + e.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
 function fmtTs(d){
   const tz = 'America/Sao_Paulo';
   return d.toLocaleDateString('pt-BR', { timeZone: tz }) + ' ' + d.toLocaleTimeString('pt-BR', { timeZone: tz, hour:'2-digit', minute:'2-digit' });
@@ -1292,10 +1343,12 @@ function renderGallery(){
         <span class="ts">${fmtTs(p.timestamp)}</span>
         ${coords ? `<span class="ts">📍 ${coords}</span>` : '<span class="ts" style="opacity:.5;">📍 sem localização</span>'}
         <textarea placeholder="Legenda desta foto...">${p.caption}</textarea>
+        <button type="button" class="aiBtn" style="align-self:flex-start; font-size:11.5px; padding:4px 8px; border:1px solid var(--blueprint); background:#fff; color:var(--blueprint); border-radius:6px; cursor:pointer;">✨ Sugerir descrição</button>
       </div>
     `;
     card.querySelector('.del').addEventListener('click', () => deletePhoto(p.id));
     card.querySelector('textarea').addEventListener('input', (e) => updateCaption(p.id, e.target.value));
+    card.querySelector('.aiBtn').addEventListener('click', (e) => suggestCaption(p, card, e.currentTarget));
     card.querySelector('.selCheck').addEventListener('change', (e) => {
       p.selected = e.target.checked;
       syncSelectAllCheckbox();
