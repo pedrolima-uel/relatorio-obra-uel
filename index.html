@@ -67,7 +67,7 @@
     font-weight:700;
     letter-spacing:-.01em;
   }
-  main{max-width:820px; margin:0 auto; padding:24px 16px 80px;}
+  main{max-width:820px; margin:0 auto; padding:24px 16px 120px;}
   .card{
     background:var(--white);
     border:1px solid var(--paper-line);
@@ -192,11 +192,30 @@
   }
 
   .actions{
-    position:sticky; bottom:0;
-    background:linear-gradient(180deg, rgba(245,243,237,0) 0%, var(--paper) 30%);
-    padding:18px 0 6px;
+    padding:6px 0 6px;
     display:flex; gap:12px; flex-wrap:wrap;
   }
+  #cameraBar{
+    position:fixed; left:0; right:0; bottom:0; z-index:60;
+    padding:14px 16px calc(12px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg, rgba(245,243,237,0) 0%, var(--paper) 40%);
+    display:flex; justify-content:center;
+    pointer-events:none;
+  }
+  #cameraBar .add-photo-btn{
+    pointer-events:auto;
+    width:100%; max-width:520px; justify-content:center;
+    padding:17px 18px; font-size:16px; border-radius:12px;
+    box-shadow:0 4px 14px rgba(14,42,63,.28);
+  }
+  .desktopAdd{display:none;}
+  @media (hover:hover) and (pointer:fine){
+    #cameraBar{display:none;}
+    .desktopAdd{display:inline-flex; margin-bottom:6px;}
+    main{padding-bottom:40px;}
+  }
+  .aiNote{font-size:11.5px; color:#7A5A00; background:#FFF4E5; border:1px solid #F0C36D; border-radius:6px; padding:4px 8px; display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .aiNote button{font-size:11.5px; padding:3px 8px; border:1px solid #B88A12; background:#fff; color:#7A5A00; border-radius:5px; cursor:pointer; font-weight:600;}
   .btn{
     flex:1; min-width:170px;
     padding:14px 16px;
@@ -297,6 +316,11 @@
         <input type="text" id="responsavel" placeholder="Ex.: Eng. Pedro Lima - CREA/RJ 2010117595/D">
       </div>
     </div>
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; font-weight:600; color:var(--navy-2); text-transform:none; letter-spacing:0; margin-top:12px;">
+      <input type="checkbox" id="legendaIACheck" checked style="width:18px; height:18px; accent-color:var(--blueprint);">
+      Legendar fotos desta obra com IA (automático, em segundo plano)
+    </label>
+    <div class="hint" style="margin-top:4px;">A IA só preenche legendas vazias de fotos novas já enviadas ao Drive, e marca como "sugerida pela IA" até você revisar. Desmarque e salve a obra para desligar.</div>
     <div class="hint" style="margin-top:2px;">Preencha "Contrato Nº/Ano" quando houver contrato formal, ou "Protocolo" quando for um processo/protocolo administrativo. Pode preencher os dois se for o caso.</div>
     <div class="status" id="obraStatus"></div>
   </section>
@@ -337,15 +361,15 @@
 
   <section class="card">
     <h2><span class="tag">03</span> Fotos da vistoria</h2>
-    <label class="add-photo-btn" for="fileInput" id="addPhotoLabel">📷 Adicionar fotos</label>
+    <label class="add-photo-btn desktopAdd" for="fileInput" id="addPhotoLabelDesktop">📁 Adicionar fotos</label>
     <input type="file" id="fileInput" accept="image/*" capture="environment" multiple>
-    <div class="hint">No celular, isso abre a câmera direto. <strong>Sempre fotografe na horizontal (paisagem)</strong> — o relatório é montado em grade de 6 fotos por página nesse formato. Se você permitir acesso à localização, cada foto é georreferenciada automaticamente.</div>
+    <div class="hint" style="margin-top:0;">O botão <strong>📷 Adicionar foto</strong>, fixo no rodapé da tela, abre a câmera direto no celular. <strong>Sempre fotografe na horizontal (paisagem)</strong> — o relatório é montado em grade de 6 fotos por página nesse formato. Se você permitir acesso à localização, cada foto é georreferenciada automaticamente.</div>
 
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;">
       <button class="btn-sm" id="btnLoadCloud">☁ Carregar fotos desta data</button>
       <button class="btn-sm primary" id="btnFinalizar">☁ Finalizar vistoria (enviar fotos)</button>
       <button class="btn-sm danger" id="btnDownloadSelected">⬇ Baixar selecionadas</button>
-      <button class="btn-sm danger" id="btnDeleteSelected" style="display:none; background:var(--danger); color:white;">🗑 DELETAR</button>
+      <button class="btn-sm danger" id="btnDeleteSelected" style="visibility:hidden; background:var(--danger); color:white;">🗑 DELETAR</button>
     </div>
     <div class="hint">Use a mesma obra e a mesma data em outro aparelho pra continuar de onde parou. "Finalizar vistoria" envia as fotos ainda não enviadas pro Google Drive.</div>
 
@@ -376,6 +400,8 @@
     <div id="emptyState" class="empty-state">Nenhuma foto adicionada ainda.</div>
   </section>
 
+  <section class="card">
+  <h2><span class="tag">04</span> Gerar relatório</h2>
   <div id="reportSelectionNotice" style="text-align:center; font-size:13px; font-weight:600; color:var(--blueprint); margin-bottom:8px;"></div>
   <div class="actions" style="flex-direction:column;">
     <div style="display:flex; gap:12px; flex-wrap:wrap;">
@@ -389,8 +415,13 @@
   </div>
   <div class="status" id="status"></div>
   <div class="hint" style="text-align:center;">"Compartilhar" abre o menu do celular — escolha o WhatsApp e envie pra si mesmo ou pro grupo da obra pra guardar como backup.</div>
+  </section>
 
 </main>
+
+<div id="cameraBar">
+  <label class="add-photo-btn" for="fileInput" id="addPhotoLabel">📷 Adicionar foto</label>
+</div>
 
 <script>
 let photos = []; // {id, dataUrl, caption, timestamp, w, h, driveId, uploaded, lat, lng, selected}
@@ -412,6 +443,7 @@ function bloquearSemObra(e){
   }
 }
 document.getElementById('addPhotoLabel').addEventListener('click', bloquearSemObra);
+document.getElementById('addPhotoLabelDesktop').addEventListener('click', bloquearSemObra);
 document.getElementById('uploadPhotoLabel').addEventListener('click', bloquearSemObra);
 const obraStatusEl = document.getElementById('obraStatus');
 const obraSelect = document.getElementById('obraSelect');
@@ -545,6 +577,7 @@ function clearObraForm(){
   document.getElementById('protocolo').value = '';
   document.getElementById('contratada').value = '';
   document.getElementById('responsavel').value = '';
+  document.getElementById('legendaIACheck').checked = true;
   obraSelect.value = '';
   document.getElementById('btnExcluirObra').disabled = true;
   renderGallery();
@@ -560,6 +593,7 @@ function fillObraForm(obra){
   document.getElementById('protocolo').value = obra.protocolo || '';
   document.getElementById('contratada').value = obra.contratada || '';
   document.getElementById('responsavel').value = obra.responsavel || '';
+  document.getElementById('legendaIACheck').checked = String(obra.legendaIA || '').toLowerCase() !== 'nao';
   document.getElementById('btnExcluirObra').disabled = false;
   renderGallery();
 }
@@ -593,7 +627,8 @@ document.getElementById('btnSalvarObra').addEventListener('click', async () => {
     contratoAno: document.getElementById('contratoAno').value.trim(),
     protocolo: document.getElementById('protocolo').value.trim(),
     contratada: document.getElementById('contratada').value.trim(),
-    responsavel: document.getElementById('responsavel').value.trim()
+    responsavel: document.getElementById('responsavel').value.trim(),
+    legendaIA: document.getElementById('legendaIACheck').checked ? 'sim' : 'nao'
   };
   obraStatusEl.textContent = 'Salvando na planilha...';
   obraStatusEl.className = 'status';
@@ -637,6 +672,7 @@ document.getElementById('btnExcluirObra').addEventListener('click', async () => 
 /* ---------------- FOTOS ---------------- */
 
 fileInput.addEventListener('change', (e) => {
+  uiGuardUntil = Date.now() + 700;
   const files = Array.from(e.target.files || []);
   files.forEach(f => readFile(f, 'camera'));
   fileInput.value = '';
@@ -1059,6 +1095,7 @@ document.getElementById('btnLoadCloud').addEventListener('click', async () => {
         id: nextId++,
         dataUrl,
         caption: photoData.caption || '',
+        aiFlag: !!photoData.aiFlag,
         timestamp: new Date(item.dateCreated),
         w: dims.w,
         h: dims.h,
@@ -1138,6 +1175,7 @@ document.getElementById('btnLoadRange').addEventListener('click', async () => {
         id: nextId++,
         dataUrl,
         caption: photoData.caption || '',
+        aiFlag: !!photoData.aiFlag,
         timestamp: new Date(item.dateCreated),
         w: dims.w,
         h: dims.h,
@@ -1218,6 +1256,7 @@ function updateCaption(id, value){
   const p = photos.find(p => p.id === id);
   if(!p) return;
   p.caption = value;
+  p.aiFlag = false;
 
   // Se a foto já está no Drive, reenvia a legenda pra lá também (com um pequeno
   // atraso após parar de digitar), pra não perder a edição num recarregamento futuro.
@@ -1344,11 +1383,18 @@ function renderGallery(){
         <span class="ts">${fmtTs(p.timestamp)}</span>
         ${coords ? `<span class="ts">📍 ${coords}</span>` : '<span class="ts" style="opacity:.5;">📍 sem localização</span>'}
         <textarea placeholder="Legenda desta foto...">${p.caption}</textarea>
+        ${p.aiFlag ? '<div class="aiNote"><span>✨ Sugerida pela IA — revise</span><button type="button" class="aiOk">✓ Confirmar</button></div>' : ''}
         <button type="button" class="aiBtn" style="align-self:flex-start; font-size:11.5px; padding:4px 8px; border:1px solid var(--blueprint); background:#fff; color:var(--blueprint); border-radius:6px; cursor:pointer;">✨ Sugerir descrição</button>
       </div>
     `;
     card.querySelector('.del').addEventListener('click', () => deletePhoto(p.id));
     card.querySelector('textarea').addEventListener('input', (e) => updateCaption(p.id, e.target.value));
+    const aiOk = card.querySelector('.aiOk');
+    if(aiOk) aiOk.addEventListener('click', () => {
+      p.aiFlag = false;
+      if(p.uploaded && p.driveId) syncCaptionToDrive(p);
+      renderGallery();
+    });
     card.querySelector('.aiBtn').addEventListener('click', (e) => suggestCaption(p, card, e.currentTarget));
     card.querySelector('.selCheck').addEventListener('change', (e) => {
       p.selected = e.target.checked;
@@ -1367,7 +1413,7 @@ function syncSelectAllCheckbox(){
 
   const btnDelete = document.getElementById('btnDeleteSelected');
   const temSelecionadas = doObraAtual.some(p => p.selected);
-  btnDelete.style.display = temSelecionadas ? 'inline-flex' : 'none';
+  btnDelete.style.visibility = temSelecionadas ? 'visible' : 'hidden';
 
   const noticeEl = document.getElementById('reportSelectionNotice');
   if(noticeEl){
@@ -1419,6 +1465,12 @@ function validate(){
   if(photosDaObraAtual().length === 0){
     statusEl.textContent = '⚠ Adicione pelo menos uma foto desta obra antes de gerar o relatório.';
     statusEl.className = 'status err';
+    return false;
+  }
+  const naoRevisadas = fotosParaRelatorio().filter(p => p.aiFlag).length;
+  if(naoRevisadas > 0 && !confirm(`${naoRevisadas} legenda(s) foram sugeridas pela IA e ainda não foram revisadas. Gerar o relatório mesmo assim?`)){
+    statusEl.textContent = '';
+    statusEl.className = 'status';
     return false;
   }
   statusEl.textContent = '';
@@ -1870,6 +1922,60 @@ document.getElementById('btnAtualizar').addEventListener('click', () => {
 });
 
 renderGallery();
+
+/* ---------------- TOQUE FANTASMA APÓS A CÂMERA ---------------- */
+let uiGuardUntil = 0;
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden) uiGuardUntil = Date.now() + 700;
+});
+document.addEventListener('click', (e) => {
+  if(Date.now() < uiGuardUntil && !e.target.closest('#cameraBar')){
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
+
+/* ---------------- LEGENDAS GERADAS EM SEGUNDO PLANO ---------------- */
+let precisaRenderizar = false;
+
+function digitandoNaGaleria(){
+  const a = document.activeElement;
+  return !!(a && a.tagName === 'TEXTAREA' && photoGrid.contains(a));
+}
+
+async function atualizarLegendasDaNuvem(){
+  if(document.hidden) return;
+  if(precisaRenderizar && !digitandoNaGaleria()){
+    precisaRenderizar = false;
+    renderGallery();
+  }
+  const pendentes = photos.filter(p => p.uploaded && p.driveId && !p.caption);
+  if(pendentes.length === 0) return;
+  try{
+    const res = await fetch(SHEETS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'getCaptions', token: SHEETS_API_TOKEN, fileIds: pendentes.slice(0, 100).map(p => p.driveId) })
+    });
+    const result = await res.json();
+    if(!result || !result.captions) return;
+    let mudou = false;
+    pendentes.forEach(p => {
+      const c = result.captions[p.driveId];
+      if(c && c.caption && !p.caption){
+        p.caption = c.caption;
+        p.aiFlag = !!c.aiFlag;
+        mudou = true;
+      }
+    });
+    if(mudou){
+      if(digitandoNaGaleria()) precisaRenderizar = true;
+      else renderGallery();
+    }
+  }catch(e){ /* sem conexão: tenta de novo no próximo ciclo */ }
+}
+setInterval(atualizarLegendasDaNuvem, 30000);
+
 loadObras();
 
 if('serviceWorker' in navigator){
