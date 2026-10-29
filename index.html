@@ -715,6 +715,12 @@ function readFile(file, source){
       }
 
       const addPhoto = (lat, lng, capturedAt) => {
+        // A pasta do Drive é a do DIA em que a foto foi tirada (e não o dia do envio):
+        // assim fotos enviadas depois pelo aparelho caem na mesma pasta das demais do dia.
+        const tag = captureObraTag();
+        if(capturedAt instanceof Date && !isNaN(capturedAt.getTime())){
+          tag.data = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(capturedAt);
+        }
         photos.push({
           id: nextId++,
           dataUrl: finalDataUrl,
@@ -727,7 +733,7 @@ function readFile(file, source){
           lat: lat,
           lng: lng,
           selected: false,
-          obraTag: captureObraTag()
+          obraTag: tag
         });
         renderGallery();
       };
