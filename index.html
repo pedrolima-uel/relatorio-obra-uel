@@ -134,6 +134,26 @@
   }
   .btn-sm.primary{background:var(--blueprint); color:white; border-color:var(--blueprint);}
   .btn-sm.primary:hover{background:var(--navy-2);}
+  /* Janela "Escolher dias" */
+  .modal-back{position:fixed; inset:0; z-index:2000; background:rgba(14,42,63,.55); display:flex; align-items:center; justify-content:center; padding:16px;}
+  .modal-box{background:var(--white); border-radius:12px; width:100%; max-width:460px; max-height:82vh; display:flex; flex-direction:column; padding:18px; box-shadow:0 12px 40px rgba(0,0,0,.3);}
+  .modal-box h3{margin:0 0 6px; font-size:17px; color:var(--navy);}
+  .days-all{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--navy-2); padding:8px 4px; cursor:pointer;}
+  .days-list{overflow-y:auto; flex:1; min-height:80px; border:1px solid var(--paper-line); border-radius:8px; -webkit-overflow-scrolling:touch;}
+  .day-row{display:flex; align-items:center; gap:10px; padding:11px 12px; border-bottom:1px solid var(--paper-line); cursor:pointer; font-size:14px;}
+  .day-row:last-child{border-bottom:none;}
+  .day-row:hover{background:var(--paper);}
+  .day-row, .day-row span{text-transform:none; letter-spacing:0;}
+  .day-row{gap:8px; font-weight:400;}
+  .day-row .d-date, .day-row .d-count{white-space:nowrap; flex:none;}
+  .day-row .d-wd{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .days-list{overflow-x:hidden;}
+  .day-row input{width:18px; height:18px; accent-color:var(--blueprint); flex:none;}
+  .day-row .d-date{font-weight:600; color:var(--navy);}
+  .day-row .d-wd{color:#6b7a86; font-size:12px; margin-left:4px;}
+  .day-row .d-count{margin-left:auto; font-size:12px; color:var(--navy-2); white-space:nowrap;}
+  .day-row .d-here{font-size:11px; color:#17846c; font-weight:700; white-space:nowrap; flex:none;}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:12px; flex-wrap:wrap;}
   .btn-sm.danger{color:var(--danger); border-color:var(--danger);}
   .btn-sm.danger:hover{background:var(--danger); color:white;}
   .btn-sm:disabled{opacity:.4; cursor:not-allowed;}
@@ -383,6 +403,7 @@
         <input type="date" id="rangeEnd">
       </div>
       <button class="btn-sm" id="btnLoadRange">☁ Carregar fotos do período</button>
+      <button class="btn-sm" id="btnPickDays">📅 Escolher dias</button>
       <label class="btn-sm" for="uploadInput" id="uploadPhotoLabel" style="cursor:pointer;">📁 Enviar fotos do aparelho</label>
       <input type="file" id="uploadInput" accept="image/*" multiple style="display:none;">
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:600; color:var(--navy-2); margin-left:6px;">
@@ -421,6 +442,19 @@
 
 <div id="cameraBar">
   <label class="add-photo-btn" for="fileInput" id="addPhotoLabel">📷 Adicionar foto</label>
+</div>
+
+<div id="daysModal" class="modal-back" style="display:none;">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="daysTitle">
+    <h3 id="daysTitle">📅 Dias com fotos desta obra</h3>
+    <div class="hint" id="daysInfo" style="margin:0 0 6px;"></div>
+    <label class="days-all"><input type="checkbox" id="daysAll" style="width:18px; height:18px; accent-color:var(--blueprint);"> Marcar todos</label>
+    <div id="daysList" class="days-list"></div>
+    <div class="modal-actions">
+      <button class="btn-sm" id="daysCancel" type="button">Cancelar</button>
+      <button class="btn-sm primary" id="daysLoad" type="button" disabled>☁ Carregar selecionados</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1123,6 +1157,64 @@ document.getElementById('btnLoadCloud').addEventListener('click', async () => {
   }
 });
 
+// Baixa do Drive as fotos da lista (ignorando as que já estão na tela) e as coloca na galeria.
+async function carregarFotosDaNuvem(list, nome, dataPadrao, descricaoPeriodo){
+  const existingIds = new Set(photos.filter(p => p.driveId).map(p => p.driveId));
+  const toFetch = list.filter(item => !existingIds.has(item.id));
+
+  if(toFetch.length === 0){
+    cloudStatusEl.textContent = list.length === 0
+      ? 'Nenhuma foto salva na nuvem nesse período para esta obra.'
+      : 'Todas as fotos desse período já estão carregadas aqui.';
+    cloudStatusEl.className = 'status';
+    return;
+  }
+
+  let loaded = 0;
+  for(const item of toFetch){
+    cloudStatusEl.textContent = `Carregando foto ${loaded+1} de ${toFetch.length}...`;
+    const getUrl = `${SHEETS_API_URL}?token=${encodeURIComponent(SHEETS_API_TOKEN)}&action=getPhoto&fileId=${encodeURIComponent(item.id)}`;
+    const photoRes = await fetch(getUrl);
+    const photoData = await photoRes.json();
+    if(photoData.error) throw new Error(photoData.error);
+
+    const dataUrl = `data:${photoData.mimeType};base64,${photoData.imageBase64}`;
+    const dims = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.src = dataUrl;
+    });
+
+    photos.push({
+      id: nextId++,
+      dataUrl,
+      caption: photoData.caption || '',
+      aiFlag: !!photoData.aiFlag,
+      timestamp: new Date(item.dateCreated),
+      w: dims.w,
+      h: dims.h,
+      driveId: item.id,
+      uploaded: true,
+      lat: photoData.lat || null,
+      lng: photoData.lng || null,
+      selected: false,
+      obraTag: {
+        obraId: currentObraId,
+        obraNome: nome,
+        centro: document.getElementById('centro').value.trim(),
+        contratoNumero: document.getElementById('contratoNumero').value.trim(),
+        contratoAno: document.getElementById('contratoAno').value.trim(),
+        protocolo: document.getElementById('protocolo').value.trim(),
+        data: item.data || dataPadrao
+      }
+    });
+    loaded++;
+    renderGallery();
+  }
+  cloudStatusEl.textContent = `✓ ${loaded} foto(s) carregada(s) ${descricaoPeriodo}.`;
+  cloudStatusEl.className = 'status ok';
+}
+
 document.getElementById('btnLoadRange').addEventListener('click', async () => {
   if(!currentObraId){
     cloudStatusEl.textContent = '⚠ Selecione ou salve uma obra cadastrada antes de usar a nuvem.';
@@ -1151,62 +1243,144 @@ document.getElementById('btnLoadRange').addEventListener('click', async () => {
     const list = await res.json();
     if(list.error) throw new Error(list.error);
 
-    const existingIds = new Set(photos.filter(p => p.driveId).map(p => p.driveId));
-    const toFetch = list.filter(item => !existingIds.has(item.id));
-
-    if(toFetch.length === 0){
-      cloudStatusEl.textContent = list.length === 0
-        ? 'Nenhuma foto salva na nuvem nesse período para esta obra.'
-        : 'Todas as fotos desse período já estão carregadas aqui.';
-      cloudStatusEl.className = 'status';
-      return;
-    }
-
-    let loaded = 0;
-    for(const item of toFetch){
-      cloudStatusEl.textContent = `Carregando foto ${loaded+1} de ${toFetch.length}...`;
-      const getUrl = `${SHEETS_API_URL}?token=${encodeURIComponent(SHEETS_API_TOKEN)}&action=getPhoto&fileId=${encodeURIComponent(item.id)}`;
-      const photoRes = await fetch(getUrl);
-      const photoData = await photoRes.json();
-      if(photoData.error) throw new Error(photoData.error);
-
-      const dataUrl = `data:${photoData.mimeType};base64,${photoData.imageBase64}`;
-      const dims = await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        img.src = dataUrl;
-      });
-
-      photos.push({
-        id: nextId++,
-        dataUrl,
-        caption: photoData.caption || '',
-        aiFlag: !!photoData.aiFlag,
-        timestamp: new Date(item.dateCreated),
-        w: dims.w,
-        h: dims.h,
-        driveId: item.id,
-        uploaded: true,
-        lat: photoData.lat || null,
-        lng: photoData.lng || null,
-        selected: false,
-        obraTag: {
-          obraId: currentObraId,
-          obraNome: nome,
-          centro: document.getElementById('centro').value.trim(),
-          contratoNumero: document.getElementById('contratoNumero').value.trim(),
-          contratoAno: document.getElementById('contratoAno').value.trim(),
-          protocolo: document.getElementById('protocolo').value.trim(),
-          data: item.data || startDate
-        }
-      });
-      loaded++;
-      renderGallery();
-    }
-    cloudStatusEl.textContent = `✓ ${loaded} foto(s) carregada(s) do período de ${formatDateBR(startDate)} a ${formatDateBR(endDate)}.`;
-    cloudStatusEl.className = 'status ok';
+    await carregarFotosDaNuvem(list, nome, startDate, `do período de ${formatDateBR(startDate)} a ${formatDateBR(endDate)}`);
   }catch(e){
     cloudStatusEl.textContent = '⚠ Não foi possível carregar as fotos do período agora. Verifique sua conexão.';
+    cloudStatusEl.className = 'status err';
+  }
+});
+
+/* ---------------- ESCOLHER DIAS (lista de datas com fotos) ---------------- */
+const daysModal = document.getElementById('daysModal');
+const daysListEl = document.getElementById('daysList');
+const daysInfoEl = document.getElementById('daysInfo');
+const daysAllEl = document.getElementById('daysAll');
+const daysLoadBtn = document.getElementById('daysLoad');
+
+function fecharDias(){ daysModal.style.display = 'none'; }
+
+function weekdayBR(iso){
+  const [y, m, d] = iso.split('-').map(Number);
+  return ['domingo','segunda','terça','quarta','quinta','sexta','sábado'][new Date(y, m-1, d).getDay()];
+}
+
+// Devolve [{data:'AAAA-MM-DD', fotos:N}] com os dias que têm fotos desta obra no Drive.
+async function buscarDiasComFotos(nome){
+  const base = `${SHEETS_API_URL}?token=${encodeURIComponent(SHEETS_API_TOKEN)}&obraId=${encodeURIComponent(currentObraId)}&obraNome=${encodeURIComponent(nome)}`;
+  // 1) caminho rápido: ação nova do Apps Script (listDates)
+  try{
+    const r = await fetch(`${base}&action=listDates`);
+    const j = await r.json();
+    if(Array.isArray(j)) return j;
+  }catch(e){ /* cai para o caminho alternativo */ }
+  // 2) alternativa (Apps Script antigo): lista as fotos e agrupa por dia — mais lento
+  const r2 = await fetch(`${base}&action=listPhotosRange&startDate=2000-01-01&endDate=2999-12-31`);
+  const lista = await r2.json();
+  if(lista.error) throw new Error(lista.error);
+  const cont = {};
+  lista.forEach(it => { if(it.data) cont[it.data] = (cont[it.data] || 0) + 1; });
+  return Object.keys(cont).map(d => ({ data: d, fotos: cont[d] }));
+}
+
+function diasMarcados(){
+  return Array.from(daysListEl.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
+}
+
+function atualizarBotaoDias(){
+  const n = diasMarcados().length;
+  const todos = daysListEl.querySelectorAll('input[type=checkbox]').length;
+  daysLoadBtn.disabled = n === 0;
+  daysLoadBtn.textContent = n > 0 ? `☁ Carregar selecionados (${n})` : '☁ Carregar selecionados';
+  daysAllEl.checked = todos > 0 && n === todos;
+}
+
+function renderDias(dias){
+  daysListEl.innerHTML = '';
+  const naTela = new Set(photos.filter(p => p.driveId && p.obraTag && p.obraTag.obraId === currentObraId).map(p => p.obraTag.data));
+  dias.slice().sort((a, b) => b.data.localeCompare(a.data)).forEach(d => {
+    const row = document.createElement('label');
+    row.className = 'day-row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = d.data;
+    cb.addEventListener('change', atualizarBotaoDias);
+    const dt = document.createElement('span');
+    dt.className = 'd-date';
+    dt.textContent = formatDateBR(d.data);
+    const wd = document.createElement('span');
+    wd.className = 'd-wd';
+    wd.textContent = weekdayBR(d.data);
+    const cnt = document.createElement('span');
+    cnt.className = 'd-count';
+    cnt.textContent = `${d.fotos} foto${d.fotos === 1 ? '' : 's'}`;
+    row.append(cb, dt, wd);
+    if(naTela.has(d.data)){
+      const here = document.createElement('span');
+      here.className = 'd-here';
+      here.textContent = '✓ na tela';
+      row.append(here);
+    }
+    row.append(cnt);
+    daysListEl.appendChild(row);
+  });
+  atualizarBotaoDias();
+}
+
+document.getElementById('btnPickDays').addEventListener('click', async () => {
+  if(!currentObraId){
+    cloudStatusEl.textContent = '⚠ Selecione ou salve uma obra cadastrada antes de usar a nuvem.';
+    cloudStatusEl.className = 'status err';
+    return;
+  }
+  const nome = document.getElementById('nome').value.trim();
+  daysModal.style.display = 'flex';
+  daysListEl.innerHTML = '';
+  daysAllEl.checked = false;
+  daysLoadBtn.disabled = true;
+  daysInfoEl.textContent = 'Consultando os dias com fotos desta obra...';
+  try{
+    const dias = await buscarDiasComFotos(nome);
+    if(dias.length === 0){
+      daysInfoEl.textContent = 'Nenhuma foto salva na nuvem para esta obra.';
+      return;
+    }
+    const total = dias.reduce((s, d) => s + d.fotos, 0);
+    daysInfoEl.textContent = `${dias.length} dia(s) com fotos · ${total} foto(s) no total. Marque os dias que quer carregar.`;
+    renderDias(dias);
+  }catch(e){
+    daysInfoEl.textContent = '⚠ Não foi possível consultar os dias agora. Verifique sua conexão e tente de novo.';
+  }
+});
+
+daysAllEl.addEventListener('change', () => {
+  daysListEl.querySelectorAll('input[type=checkbox]').forEach(c => { c.checked = daysAllEl.checked; });
+  atualizarBotaoDias();
+});
+
+document.getElementById('daysCancel').addEventListener('click', fecharDias);
+daysModal.addEventListener('click', (e) => { if(e.target === daysModal) fecharDias(); });
+document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && daysModal.style.display !== 'none') fecharDias(); });
+
+daysLoadBtn.addEventListener('click', async () => {
+  const escolhidos = diasMarcados().sort();
+  if(escolhidos.length === 0) return;
+  fecharDias();
+  const nome = document.getElementById('nome').value.trim();
+  const conjunto = new Set(escolhidos);
+  cloudStatusEl.textContent = 'Consultando fotos dos dias escolhidos...';
+  cloudStatusEl.className = 'status';
+  try{
+    const listUrl = `${SHEETS_API_URL}?token=${encodeURIComponent(SHEETS_API_TOKEN)}&action=listPhotosRange&obraId=${encodeURIComponent(currentObraId)}&obraNome=${encodeURIComponent(nome)}&startDate=${encodeURIComponent(escolhidos[0])}&endDate=${encodeURIComponent(escolhidos[escolhidos.length - 1])}`;
+    const res = await fetch(listUrl);
+    const todas = await res.json();
+    if(todas.error) throw new Error(todas.error);
+    const list = todas.filter(it => conjunto.has(it.data));
+    const descricao = escolhidos.length === 1
+      ? `do dia ${formatDateBR(escolhidos[0])}`
+      : `de ${escolhidos.length} dias escolhidos`;
+    await carregarFotosDaNuvem(list, nome, escolhidos[0], descricao);
+  }catch(e){
+    cloudStatusEl.textContent = '⚠ Não foi possível carregar as fotos dos dias escolhidos agora. Verifique sua conexão.';
     cloudStatusEl.className = 'status err';
   }
 });
